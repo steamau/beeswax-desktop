@@ -1,3 +1,7 @@
 node_modules/
 dist/
 *.mcpb
+.env.local
+mcp-call.mjs
+run-property.mjs
+verify-property.mjs

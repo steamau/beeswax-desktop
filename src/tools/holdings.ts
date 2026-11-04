@@ -31,6 +31,13 @@ export function register(server: McpServer, api: Api): void {
         quantity: z.number().optional().describe("Units acquired"),
         purchase_price_per_unit: z.number().optional().describe("Purchase price per unit in AUD"),
         currency: z.string().optional().describe('Currency code (default "AUD")'),
+        share_registry: z
+          .string()
+          .optional()
+          .describe(
+            'Share registry: "computershare", "mufg" (MUFG Corporate Markets, formerly Link Market Services), ' +
+              '"automic", "boardroom", "advanced", "xcend" or "other". Left out, it is looked up from the ticker when one is on file.'
+          ),
         notes: z.string().optional()
       }
     },
@@ -65,6 +72,13 @@ export function register(server: McpServer, api: Api): void {
           .describe('Asset type by name or category, e.g. "ETF" or "equity" (see list_asset_types)'),
         broker_id: z.number().int().positive().optional().describe("Broker ID (see list_brokers)"),
         hin: z.string().optional().describe("Holder Identification Number"),
+        share_registry: z
+          .string()
+          .optional()
+          .describe(
+            'Share registry: "computershare", "mufg" (MUFG Corporate Markets, formerly Link Market Services), ' +
+              '"automic", "boardroom", "advanced", "xcend" or "other". Left out, it is looked up from the ticker when one is on file.'
+          ),
         acquisition_date: isoDate("Acquisition date").optional(),
         quantity: z
           .number()

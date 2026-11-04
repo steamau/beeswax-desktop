@@ -1,0 +1,278 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import type { Api } from "../api.js";
+import { API_TOKEN, BASE_URL, toResult } from "../api.js";
+import { sanitizeText } from "../untrusted.js";
+import { financialYearKey, fundId, READS, WRITES, WRITES_DESTRUCTIVE } from "../shared.js";
+
+// Workstream E — signing off the return (confirm / reopen sections, finalise)
+// and the year-end pack PDFs. Declaring and lodging stay in the web app.
+
+const smsfReturnId = z.number().int().positive().describe("SMSF return ID (from get_smsf_return / create_smsf_return)");
+const sectionKey = z
+  .string()
+  .describe(
+    'Return section key, e.g. "fund_information", "income", "deductions", "tax_calc", "assets_liabilities", ' +
+      'or "members" for the member information statement (the keys get_smsf_return lists)'
+  );
+
+/** Where exported PDFs are written: BEESWAX_EXPORT_DIR, else ~/Downloads/beeswax-shares. */
+export function exportDir(): string {
+  const configured = process.env.BEESWAX_EXPORT_DIR;
+  return configured && configured.trim() ? resolve(configured.trim()) : join(homedir(), "Downloads", "beeswax-shares");
+}
+
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504, 530]);
+
+/**
+ * GET a binary (PDF) endpoint of the API. api() parses JSON only, so PDFs come
+ * through here: same bearer auth, a few retries on gateway errors, and the
+ * JSON error body surfaced on failure.
+ */
+export async function apiBinary(
+  path: string,
+  query: Record<string, string | number | undefined> = {}
+): Promise<{ bytes: Buffer; filename?: string; contentType: string }> {
+  if (!API_TOKEN) {
+    throw new Error("BEESWAX_API_TOKEN is not set. Create a token in the Beeswax Shares app (Account → API Access).");
+  }
+  const url = new URL(`${BASE_URL}/api/v1${path}`);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
+  }
+
+  for (let attempt = 1; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { Authorization: `Bearer ${API_TOKEN}`, Accept: "application/pdf, application/json" } });
+    } catch (err) {
+      if (attempt <= 3) {
+        await new Promise((r) => setTimeout(r, 300 * attempt));
+        continue;
+      }
+      throw new Error(`Could not reach the Beeswax Shares API at ${BASE_URL}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (RETRYABLE_STATUS.has(res.status) && attempt <= 3) {
+      await res.body?.cancel().catch(() => {});
+      await new Promise((r) => setTimeout(r, 300 * attempt));
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      let message = text.slice(0, 300) || res.statusText;
+      try {
+        const json = JSON.parse(text) as { error?: unknown };
+        if (json && json.error !== undefined) message = String(json.error);
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(sanitizeText(`Beeswax API error (HTTP ${res.status}): ${message}`));
+    }
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = /filename="?([^";]+)"?/i.exec(disposition);
+    return {
+      bytes: Buffer.from(await res.arrayBuffer()),
+      filename: match?.[1],
+      contentType: res.headers.get("Content-Type") ?? ""
+    };
+  }
+}
+
+/** Write a downloaded PDF into the export folder and describe it for the model. */
+async function savePdf(download: { bytes: Buffer; filename?: string; contentType: string }, fallbackName: string) {
+  if (!download.bytes.subarray(0, 5).toString("latin1").startsWith("%PDF")) {
+    throw new Error(`Expected a PDF from the API but got ${download.contentType || "an unknown type"}.`);
+  }
+  const dir = exportDir();
+  await mkdir(dir, { recursive: true });
+  const safeName = (download.filename ?? fallbackName).replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+/, "") || fallbackName;
+  const path = join(dir, safeName.endsWith(".pdf") ? safeName : `${safeName}.pdf`);
+  await writeFile(path, download.bytes);
+  const result = {
+    path,
+    size_bytes: download.bytes.length,
+    size: `${(download.bytes.length / 1024).toFixed(1)} KB`,
+    note: "PDF saved on this computer. Give the user the path; don't try to read the file back."
+  };
+  return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+}
+
+export function register(server: McpServer, api: Api): void {
+  server.registerTool(
+    "confirm_smsf_return_section",
+    {
+      title: "Confirm an SMSF return section",
+      annotations: WRITES,
+      description:
+        "Confirm one section of an SMSF annual return: its computed figures are snapshotted as reviewed. Refused " +
+        "(with the reasons) while the section has blocking gaps, or the return is already " +
+        "finalised — fix those first (list_smsf_return_gaps). Returns the completion %, the sections still " +
+        "unconfirmed and what still blocks finalising. Only confirm a section after the user has reviewed it.",
+      inputSchema: { fund_id: fundId, smsf_return_id: smsfReturnId, section_key: sectionKey }
+    },
+    async ({ fund_id, smsf_return_id, section_key }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/smsf_returns/${smsf_return_id}/confirm_section`, { body: { section_key } })
+      )
+  );
+
+  server.registerTool(
+    "reopen_smsf_return_section",
+    {
+      title: "Reopen a confirmed SMSF return section",
+      annotations: WRITES,
+      description:
+        "Undo a section confirmation so its figures can be edited again (drops that section's confirmation " +
+        "snapshot; the figures themselves are unchanged). Not possible once the return is finalised — reopening a " +
+        "finalised return is done in the web app.",
+      inputSchema: { fund_id: fundId, smsf_return_id: smsfReturnId, section_key: sectionKey }
+    },
+    async ({ fund_id, smsf_return_id, section_key }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/smsf_returns/${smsf_return_id}/unconfirm_section`, { body: { section_key } })
+      )
+  );
+
+  server.registerTool(
+    "finalise_smsf_return",
+    {
+      title: "Finalise an SMSF annual return",
+      annotations: WRITES_DESTRUCTIVE,
+      description:
+        "Finalise the return: freezes every figure into a snapshot so later ledger changes no longer move it, and " +
+        "opens step 3 (audit). Requires the year-end review to be locked (step 1), every section confirmed and no " +
+        "blocking gaps; otherwise fails with the list of blockers. Ask the user before calling. Declarations and " +
+        "lodgement are then done by people in the web app; unfinalising is web-only too. Never lodges. " +
+        "confirm must be true — only pass it after the user has said to finalise this return.",
+      inputSchema: {
+        fund_id: fundId,
+        smsf_return_id: smsfReturnId,
+        confirm: z
+          .literal(true)
+          .describe("Must be true: the user has explicitly asked to finalise this return")
+      }
+    },
+    async ({ fund_id, smsf_return_id, confirm }) =>
+      toResult(await api("POST", `/funds/${fund_id}/smsf_returns/${smsf_return_id}/finalise`, { body: { confirm } }))
+  );
+
+  server.registerTool(
+    "export_smsf_return_pdf",
+    {
+      title: "Export the SMSF return as a PDF",
+      annotations: READS,
+      description:
+        "Render the SMSF annual return (every completed label in NAT 71226 order, plus member information) as a " +
+        "PDF and save it on this computer (BEESWAX_EXPORT_DIR, default ~/Downloads/beeswax-shares). Returns the " +
+        "file path and size — share the path with the user.",
+      inputSchema: { fund_id: fundId, smsf_return_id: smsfReturnId }
+    },
+    async ({ fund_id, smsf_return_id }) =>
+      savePdf(
+        await apiBinary(`/funds/${fund_id}/smsf_returns/${smsf_return_id}/export_pdf`),
+        `smsf-return-${smsf_return_id}.pdf`
+      )
+  );
+
+  server.registerTool(
+    "list_year_end_pack",
+    {
+      title: "List the year-end pack",
+      annotations: READS,
+      description:
+        "List the documents in a financial year's year-end pack — statement of financial position, operating " +
+        "statement, detailed operating statement (income and market movements by holding), notes to the financial " +
+        "statements, trustees' declaration, investment summary, tax reconciliation, one member statement per member, " +
+        "trustee minutes, trustee representation letter and the return — with headline totals (benefits accrued, " +
+        "income tax expense, net assets, taxable income, whether the tax reconciliation ties to the return). All " +
+        "figures come from the same services as the return. Amounts in AUD.",
+      inputSchema: { fund_id: fundId, financial_year: financialYearKey }
+    },
+    async ({ fund_id, financial_year }) =>
+      toResult(await api("GET", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack`))
+  );
+
+  server.registerTool(
+    "get_year_end_pack_document",
+    {
+      title: "Get a year-end pack document as JSON",
+      annotations: READS,
+      description:
+        "Return one year-end pack document as structured JSON (headings, tables, lines and figures) — the same " +
+        "content get_year_end_pack_pdf renders — for checking figures or building your own working papers. " +
+        "Document keys come from list_year_end_pack; member_statement also needs member_id. Amounts in AUD.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        document: z
+          .enum([
+            "statement_of_financial_position",
+            "operating_statement",
+            "detailed_operating_statement",
+            "notes_to_financial_statements",
+            "trustees_declaration",
+            "investment_summary",
+            "tax_reconciliation",
+            "member_statement",
+            "trustee_minutes",
+            "trustee_representation_letter",
+            "smsf_return"
+          ])
+          .describe("Which document"),
+        member_id: z.number().int().positive().optional().describe("Member ID, for document member_statement")
+      }
+    },
+    async ({ fund_id, financial_year, document, member_id }) =>
+      toResult(
+        await api(
+          "GET",
+          `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack/documents/${document}`,
+          { query: { member_id } }
+        )
+      )
+  );
+
+  server.registerTool(
+    "get_year_end_pack_pdf",
+    {
+      title: "Get the year-end pack as a PDF",
+      annotations: READS,
+      description:
+        "Render the whole year-end pack (cover, contents and every document) — or one document — as a PDF and save " +
+        "it on this computer (BEESWAX_EXPORT_DIR, default ~/Downloads/beeswax-shares). Returns the file path and " +
+        "size. Document keys come from list_year_end_pack; member_statement also needs member_id.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        document: z
+          .enum([
+            "statement_of_financial_position",
+            "operating_statement",
+            "detailed_operating_statement",
+            "notes_to_financial_statements",
+            "trustees_declaration",
+            "investment_summary",
+            "tax_reconciliation",
+            "member_statement",
+            "trustee_minutes",
+            "trustee_representation_letter",
+            "smsf_return"
+          ])
+          .optional()
+          .describe("One document only; omit for the whole pack"),
+        member_id: z.number().int().positive().optional().describe("Member ID, for document member_statement")
+      }
+    },
+    async ({ fund_id, financial_year, document, member_id }) =>
+      savePdf(
+        await apiBinary(`/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack/pdf`, {
+          document,
+          member_id
+        }),
+        `${document ?? "year-end-pack"}-${financial_year}.pdf`
+      )
+  );
+}

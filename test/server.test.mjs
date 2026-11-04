@@ -28,6 +28,8 @@ test("server exposes untrusted-data instructions and tool annotations", async ()
     assert.equal(byName.get("record_trade").annotations.destructiveHint, false);
     assert.equal(byName.get("detach_cash_transaction").annotations.destructiveHint, true);
     assert.equal(byName.get("update_price").annotations.destructiveHint, true);
+    assert.equal(byName.get("update_holding").annotations.readOnlyHint, false);
+    assert.equal(byName.get("update_holding").annotations.destructiveHint, true);
 
     // Every tool must carry an explicit annotation.
     for (const tool of tools) {

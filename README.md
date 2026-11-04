@@ -1,5 +1,8 @@
 # Beeswax Shares MCP Server
 
+MCP/API access requires an active **Trustee** subscription (AUD $19/month or $190/year). Legacy paid subscriptions also include access. Your AI provider account is separate. Free users can manage their records and export them in the web app; preparing or amending an annual return requires the fund owner's paid entitlement.
+
+
 A standalone [Model Context Protocol](https://modelcontextprotocol.io) server for **Beeswax Shares**, the SMSF (Australian self-managed super fund) portfolio app. It is a thin client over the app's JSON API (`/api/v1`), letting Claude (Desktop or Code) operate the ledger end to end: read portfolio data, record trades and income, upload statements, reconcile bank cash, and run the financial-year lifecycle.
 
 Claude connects to it over stdio. All money amounts are AUD unless stated otherwise.
@@ -17,7 +20,7 @@ Writes go **directly to the ledger** — there is no review/approval step. `reco
 Statement lines, cash narrations, document titles and extraction errors originate in **user-uploaded PDFs/CSVs and bank feeds** — attacker-reachable channels. The server defends the model driving it in layers (`src/untrusted.ts`):
 
 - **Sanitisation** — every tool result (and API error) is stripped of invisible/steering Unicode (zero-width chars, bidi controls, the tag block) that could hide instructions from a human while remaining legible to a model. The Rails app applies the same scrub at ingestion, so stored ledger text is already clean.
-- **Fencing** — results from document/statement tools (`get_document`, `list_documents`, `reconcile_document`, `upload_document`, `list_cash_transactions`, `search_transactions`) are wrapped between `<<<BEGIN_UNTRUSTED_DOCUMENT_DATA>>>` / `<<<END_UNTRUSTED_DOCUMENT_DATA>>>` markers behind a security notice; forged markers inside the data are defanged. The client model is told to treat fence contents strictly as data, never as instructions.
+- **Fencing** — results from document/statement tools (`get_document`, `list_documents`, `reconcile_document`, `upload_document`, `submit_document_lines`, `list_cash_transactions`, `search_transactions`) are wrapped between `<<<BEGIN_UNTRUSTED_DOCUMENT_DATA>>>` / `<<<END_UNTRUSTED_DOCUMENT_DATA>>>` markers behind a security notice; forged markers inside the data are defanged. The client model is told to treat fence contents strictly as data, never as instructions.
 - **Server instructions** — delivered at `initialize`, restating the standing rule: only the human user directs actions; instruction-like text found in tool results must be surfaced, not obeyed.
 - **Tool annotations** — every tool declares `readOnlyHint`/`destructiveHint` so client harnesses can gate confirmation on writes.
 - **Extraction tripwire** — server-side PDF extraction flags documents containing instruction-like text; such documents come back with `"suspected_injection": true` (plus a note). Warn the user and verify the lines against the original file before recording anything from them.
@@ -33,9 +36,12 @@ Statement lines, cash narrations, document titles and extraction errors originat
 | `get_holding_analysis` | True return, income/cost totals, CGT estimate, net proceeds if sold |
 | `search_transactions` | Ledger search (type, financial year, date range, ticker) — "memory recall" |
 | `create_holding` | Create a brand-new security/asset in the fund |
+| `update_holding` | Edit an existing holding's fields (e.g. correct a property's cost base via `purchase_price`) |
 | `record_trade` | Record a buy/sell directly to the ledger (idempotent via `external_ref`) |
 | `record_income` | Record a dividend/distribution/interest/rental income directly to the ledger |
-| `upload_document` | Upload a local PDF/CSV statement; extraction + reconciliation run automatically |
+| `upload_document` | Upload a local PDF/CSV statement; a CSV imports + reconciles automatically, a PDF waits for `submit_document_lines` |
+| `download_document` | Save an uploaded document's original file locally (e.g. one uploaded on the web) so the assistant can read it |
+| `submit_document_lines` | Post the lines the assistant read from a statement; Alpha validates, scrubs and reconciles them like a CSV import |
 | `get_document` | Document + extracted statement lines with match statuses |
 | `list_documents` | Uploaded documents with extraction status |
 | `reconcile_document` | Re-run statement-vs-ledger matching; returns a summary |
@@ -84,26 +90,43 @@ This compiles TypeScript to `dist/index.js`.
 
 The easiest way to give this to other people is to package it as a **Desktop Extension** — a single `.mcpb` file they open in Claude Desktop. Claude Desktop runs it with its **own bundled Node** (users need nothing installed) and prompts each user for their **own** API token, stored securely in the OS keychain. Each token scopes access to that user's own funds, so the same bundle works for everyone.
 
-### Build the bundle (maintainer)
+### Release a new version (maintainer)
 
 ```sh
 cd mcp-server
-npm install            # all deps (incl. TypeScript, for the build)
-npm run build          # compile to dist/index.js
-npm prune --omit=dev   # drop dev deps so they don't ship in the bundle
-npx @anthropic-ai/mcpb pack . beeswax-shares.mcpb
+npm ci
+npm run release -- 1.5.0   # or patch | minor | major
 ```
 
-This produces `beeswax-shares.mcpb` (~3 MB). The bundle's metadata and the user-facing config form live in [`manifest.json`](manifest.json); `mcpb pack` validates it. Distribute the `.mcpb` via a GitHub Release, a download link, or email — it is a build artifact and is git-ignored, not committed.
+`release` bumps the version in `package.json`, `package-lock.json` and `manifest.json`
+together, rebuilds `dist/` from source, regenerates `manifest.json`'s `tools` array from the
+registered tools, runs the tests and packs `build/beeswax-shares-<version>.mcpb`. It deletes
+every other `.mcpb` in `build/`, so an old bundle can't be installed by mistake. Commit
+`package.json`, `package-lock.json` and `manifest.json`; the `.mcpb` is a git-ignored build artifact.
+
+`npm run pack:mcpb` repacks the current version. Both pack a staging copy holding only
+`dist/`, `manifest.json`, `package.json`, the README and **production** `node_modules`.
+
+**The manifest's tool list is generated.** After adding, renaming or removing a tool, run
+`npm run manifest` (new tools get the first sentence of their description — edit it if it
+reads badly). `npm test` fails when the manifest's tools or version differ from what the
+built server registers (`test/version.test.mjs`). The server reads its version from
+`package.json` at runtime (`src/version.ts`).
+
+**Write tools.** Every write tool takes `reasoning` (stored on the audit log) and
+`external_ref` (idempotency) — added in one place, `src/write_context.ts`, and sent to the
+API as `X-Reasoning` / `Idempotency-Key`. A write without `external_ref` still gets a per-call
+key, so a retried request after a 502/530 can't apply twice.
 
 > Optional: `npx @anthropic-ai/mcpb sign` adds a code signature so users don't see an "unverified publisher" prompt on install. Unsigned bundles still install fine, with a one-time confirmation.
 
-### Install (end user)
+### Install or upgrade (Claude desktop app)
 
-1. Download `beeswax-shares.mcpb`.
-2. Open it with **Claude Desktop** (double-click) — an install dialog appears.
-3. When prompted, paste your **API token** (create one at **Account → API Access** in Beeswax Shares — it is shown only once). Leave **Server URL** as the default unless you run your own instance.
-4. Done — the Beeswax Shares tools are now available in Claude.
+1. In Claude: **Settings → Extensions**, find **Beeswax Shares**, and **Uninstall** any older
+   version (an older bundle installed over the top is what kept sessions on 1.2.0).
+2. Open `build/beeswax-shares-<version>.mcpb` (double-click, or drag it onto the Extensions page) and click **Install**.
+3. Paste your **API token** (Account → API Access in Beeswax Shares — shown only once). Server URL: `https://alpha.beeswaxapp.com`.
+4. Start a **new** conversation and ask Claude to call `server_info` — it reports the version and tool count without touching the API (`whoami` also returns it under `mcp_server`).
 
 ## Configuration (manual / developer setup)
 

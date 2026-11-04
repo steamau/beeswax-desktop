@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Api } from "../api.js";
 import { toResult } from "../api.js";
-import { fundId, isoDate, financialYearKey, READS, WRITES_DESTRUCTIVE } from "../shared.js";
+import { fundId, isoDate, financialYearKey, READS, WRITES, WRITES_DESTRUCTIVE } from "../shared.js";
 
 // 30 June (EOFY) valuations — the per-holding, per-year figures the SMSF return's
 // balance sheet (item 15) and statement of financial position use, and what clears
@@ -66,5 +66,51 @@ export function register(server: McpServer, api: Api): void {
           body: { valuation }
         })
       )
+  );
+
+  server.registerTool(
+    "get_historical_price",
+    {
+      title: "Get a historical market close",
+      annotations: READS,
+      description:
+        "Look up the Yahoo Finance end-of-day close for a LISTED ticker on a date — the close on that day, or the " +
+        "last trading day before it if it didn't trade (weekend, holiday, suspension). Records nothing. Returns " +
+        "symbol (e.g. MDX.AX), trade_date, close, currency, trading_days_before_requested, stale (true when the " +
+        "last trade is more than 5 trading days before the date — check for a suspension or delisting) and the " +
+        "evidence line to pass to record_valuation. Not for unlisted trusts, private equity or property: those " +
+        "have no market price and need a statement or valuer's report.",
+      inputSchema: {
+        ticker: z.string().min(1).describe('Ticker without exchange suffix, e.g. "MDX" or "BHP"'),
+        date: isoDate("Date to price"),
+        exchange: z
+          .enum(["ASX", "NZX", "LSE", "HKEX", "NYSE", "NASDAQ"])
+          .optional()
+          .describe("Exchange (default ASX)"),
+        currency: z.string().length(3).optional().describe('Convert the close into this currency, e.g. "AUD"')
+      }
+    },
+    async ({ ticker, date, exchange, currency }) =>
+      toResult(await api("GET", "/market_prices/historical", { query: { ticker, date, exchange, currency } }))
+  );
+
+  server.registerTool(
+    "snapshot_eofy_valuations",
+    {
+      title: "Snapshot 30 June valuations for listed holdings",
+      annotations: WRITES,
+      description:
+        "Price every LISTED holding the fund held at a financial year's 30 June from the Yahoo Finance close on or " +
+        "before that date, and record it as the year's valuation (source yahoo) with evidence naming the symbol, " +
+        "trade date and fetch date (flagged STALE when the last trade is more than 5 trading days earlier). " +
+        "Unlisted trusts, private equity, property and other unlisted assets are left unvalued, so gap G3 stays " +
+        "open for them until record_valuation is called with real evidence. Never overwrites a valuation that " +
+        "has evidence or source statement, and never a locked year. Safe to re-run. Returns result counts " +
+        "(priced, failed, stale, skipped_unlisted, skipped_protected, skipped_locked) and the year's valuations " +
+        "as list_valuations does.",
+      inputSchema: { fund_id: fundId, financial_year: financialYearKey }
+    },
+    async ({ fund_id, financial_year }) =>
+      toResult(await api("POST", `/funds/${fund_id}/financial_years/${financial_year}/valuations/snapshot`))
   );
 }

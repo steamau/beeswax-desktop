@@ -1,6 +1,6 @@
 {
   "name": "beeswax-shares-mcp",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "MCP server for Beeswax Shares — SMSF portfolio record-keeping over the app's JSON API",
   "license": "UNLICENSED",
   "private": true,
@@ -19,7 +19,8 @@
     "manifest:check": "node scripts/manifest.mjs --check",
     "test": "npm run build && node scripts/manifest.mjs --check && node --test test/*.test.mjs",
     "pack:mcpb": "bash scripts/pack-mcpb.sh",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "publish:desktop": "bash scripts/publish.sh"
   },
   "engines": {
     "node": ">=18"

@@ -71,7 +71,9 @@ export function register(server: McpServer, api: Api): void {
       description:
         "Full portfolio snapshot for one SMSF fund: fund summary (value, cost base, unrealised gain/loss, " +
         "income, true return), asset allocation percentages, and every active holding with current value and " +
-        "returns. The best single call to answer 'how is the fund doing?' or 'what do we hold?'. All amounts AUD.",
+        "returns. The best single call to answer 'how is the fund doing?' or 'what do we hold?'. All amounts AUD. " +
+        "Listed holdings' current prices come from Yahoo Finance (end-of-day close, or a ~15–20 min delayed " +
+        "quote if refreshed on the web); unlisted assets carry the last update_price/record_valuation figure.",
       inputSchema: { fund_id: fundId }
     },
     async ({ fund_id }) => toResult(await api("GET", `/funds/${fund_id}/portfolio`))

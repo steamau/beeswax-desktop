@@ -107,6 +107,20 @@ every other `.mcpb` in `build/`, so an old bundle can't be installed by mistake.
 `npm run pack:mcpb` repacks the current version. Both pack a staging copy holding only
 `dist/`, `manifest.json`, `package.json`, the README and **production** `node_modules`.
 
+**Publish it, or trustees never get it.** The app's *Download extension* button
+(`/download/claude`) serves the latest release of the public
+[steamau/beeswax-desktop](https://github.com/steamau/beeswax-desktop) repo, not this
+folder. Once the release is merged to `main`:
+
+```sh
+npm run publish:desktop    # optional: -- --notes-file notes.md
+```
+
+It builds the bundle from `origin/main` (never your working tree), mirrors `mcp-server/`
+into beeswax-desktop as a `Sync v<version>` commit and tag, creates the GitHub release with
+the bundle attached as `beeswax-shares.mcpb`, and checks the download URL now resolves to the
+new tag. It refuses a version that already has a release.
+
 **The manifest's tool list is generated.** After adding, renaming or removing a tool, run
 `npm run manifest` (new tools get the first sentence of their description — edit it if it
 reads badly). `npm test` fails when the manifest's tools or version differ from what the

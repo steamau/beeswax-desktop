@@ -47,7 +47,10 @@ export function register(server: McpServer, api: Api): void {
         "price so portfolio values refresh. Use when you have an updated valuation or a " +
         "reliable quoted price. Price in AUD per unit. This does NOT set the SMSF return's 30 June " +
         "valuation (item 15) or clear gap G3, even when dated 30 June — use record_valuation for that " +
-        "(a price on/before 30 June is only the return's fallback estimate until one is recorded).",
+        "(a price on/before 30 June is only the return's fallback estimate until one is recorded). " +
+        "Listed holdings (with a ticker) are already priced from Yahoo Finance each weekday (source \"yahoo\"), " +
+        "so you rarely need this for them — a manual price on the same date as a feed close is overwritten by " +
+        "the next feed run. Mainly for unlisted assets and for prices the feed can't get.",
       inputSchema: {
         fund_id: fundId,
         holding_id: z.number().int().positive().describe("Holding to price (find via list_holdings)"),

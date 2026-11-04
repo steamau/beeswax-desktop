@@ -33,6 +33,18 @@ test("valuation tools are registered with annotations", async () => {
       assert.ok(key in record.inputSchema.properties, `record_valuation should accept ${key}`);
     }
     assert.match(byName.get("update_price").description, /record_valuation/);
+
+    const hist = byName.get("get_historical_price");
+    assert.ok(hist, "get_historical_price missing");
+    assert.equal(hist.annotations.readOnlyHint, true);
+    assert.deepEqual([...hist.inputSchema.required].sort(), ["date", "ticker"]);
+
+    const snap = byName.get("snapshot_eofy_valuations");
+    assert.ok(snap, "snapshot_eofy_valuations missing");
+    assert.equal(snap.annotations.readOnlyHint, false);
+    assert.equal(snap.annotations.destructiveHint, false);
+    assert.deepEqual([...snap.inputSchema.required].sort(), ["financial_year", "fund_id"]);
+    assert.match(snap.description, /Unlisted/);
   } finally {
     await client.close();
   }

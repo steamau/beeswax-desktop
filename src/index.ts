@@ -30,6 +30,7 @@ import { register as register_member_statements } from "./tools/member_statement
 import { register as register_valuations } from "./tools/valuations.js";
 import { register as register_fund_admin } from "./tools/fund_admin.js";
 import { register as register_year_end_pack } from "./tools/year_end_pack.js";
+import { register as register_navigation } from "./tools/navigation.js";
 
 // ── Server + tools ─────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ register_member_statements(server, api);
 register_valuations(server, api);
 register_fund_admin(server, api);
 register_year_end_pack(server, api);
+register_navigation(server, api);
 
 // ── Startup ────────────────────────────────────────────────────────────────
 

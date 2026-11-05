@@ -78,4 +78,10 @@ export const SERVER_INSTRUCTIONS =
   "current prices to Yahoo's ~15–20 min delayed intraday quote, so current_price_date says how fresh " +
   "a price is. Quotes in another currency are converted to the holding's currency at the latest FX " +
   "rate. Unlisted assets (property, unlisted funds, collectibles, etc.) have no feed: their prices " +
-  "come only from update_price or record_valuation. There is no tool to trigger a feed refresh.";
+  "come only from update_price or record_valuation. There is no tool to trigger a feed refresh. " +
+  "GUIDING THE USER: you are also the trustee's guide to the Alpha web app. When you mention a record, link " +
+  "it with the web_url the API returned for it (holdings, transactions, bank accounts, financial years, return " +
+  "sections, fields and gaps, year-end review checks). When the user asks where to see or do something, or a " +
+  "step must be done by a person on the web (sign-offs, locking the review, declarations, lodging), call " +
+  "find_page and give them its menu path and URL. Never construct or guess an app URL. Use search_help / " +
+  "get_help to explain how a page works.";

@@ -224,10 +224,13 @@ export function register(server: McpServer, api: Api): void {
       annotations: READS,
       description:
         "List each bank account's statement closing-balance snapshots (from posted statements or " +
-        "record_statement_balance). With financial_year, also returns per account the 30 June ledger balance " +
+        "record_statement_balance), each with the ledger balance that day and the difference (opening_anchor: true " +
+        "marks the statement the day before the opening balance date, compared with opening_balance). " +
+        "constant_difference is set when the ledger is out by the same amount at every statement since a date — " +
+        "check the opening balance. With financial_year, also returns per account the 30 June ledger balance " +
         "the return uses (eofy.ledger_balance), the latest statement balance on or before 30 June, their " +
-        "difference, and whether the account counts as return cash (ATO accounts don't). A non-zero difference " +
-        "means the ledger is missing or has extra lines before 30 June. AUD.",
+        "difference, and whether the account counts as return cash (ATO accounts don't). A difference that " +
+        "changes between statements means the ledger is missing or has extra lines in between. AUD.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey.optional(),
@@ -333,6 +336,48 @@ export function register(server: McpServer, api: Api): void {
           "POST",
           `/funds/${fund_id}/bank_accounts/${bank_account_id}/cash_transactions/${cash_transaction_id}/attribute`,
           { body: attribution }
+        )
+      )
+  );
+
+  server.registerTool(
+    "split_cash_transaction",
+    {
+      title: "Split a cash row into categorised parts",
+      annotations: WRITES,
+      description:
+        "Split one cash row into two or more parts that add up to it exactly, each with its own category — e.g. " +
+        "an ATO credit of $336 that is a $308.73 refund (tax_refund) plus $27.27 interest on overpayment " +
+        "(income_bank_interest, assessable). The original row becomes part 1 (same id, statement links and " +
+        "reconciliation tick); the other parts are new rows on the same date with the same tick, external_ref " +
+        "\"<original ref>:split:<n>\". Audit-logged with your reasoning. Refused for a locked year, a row linked " +
+        "to an income transaction, cost or counter-transfer (detach first), a row with a GST amount, or parts " +
+        "that don't sum to the original. Signed amounts like the original (+ in / − out), AUD.",
+      inputSchema: {
+        fund_id: fundId,
+        bank_account_id: z.number().int().positive().describe("Bank account the cash row is on"),
+        cash_transaction_id: z.number().int().positive().describe("The cash row to split"),
+        parts: z
+          .array(
+            z.object({
+              amount: z.number().describe("Signed amount of this part"),
+              category: z.string().describe('Cash category, e.g. "tax_refund", "income_bank_interest"'),
+              description: z.string().optional().describe("Defaults to the original's description + (part n of N)"),
+              fund_member_id: z.number().int().positive().optional().describe("For a contribution part"),
+              contribution_type: z.string().optional(),
+              tax_component: z.string().optional()
+            })
+          )
+          .min(2)
+          .describe("The parts; amounts must sum to the original row's amount")
+      }
+    },
+    async ({ fund_id, bank_account_id, cash_transaction_id, parts }) =>
+      toResult(
+        await api(
+          "POST",
+          `/funds/${fund_id}/bank_accounts/${bank_account_id}/cash_transactions/${cash_transaction_id}/split`,
+          { body: { parts } }
         )
       )
   );

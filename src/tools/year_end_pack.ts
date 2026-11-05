@@ -142,9 +142,9 @@ export function register(server: McpServer, api: Api): void {
       title: "Finalise an SMSF annual return",
       annotations: WRITES_DESTRUCTIVE,
       description:
-        "Finalise the return: freezes every figure into a snapshot so later ledger changes no longer move it, and " +
-        "opens step 3 (audit). Requires the year-end review to be locked (step 1), every section confirmed and no " +
-        "blocking gaps; otherwise fails with the list of blockers. Ask the user before calling. Declarations and " +
+        "Finalise the tax return: freezes every figure into a snapshot so later ledger changes no longer move it, " +
+        "and locks the financial year. Requires every section confirmed, no blocking gaps and no blocking checks " +
+        "(see get_return_checks); otherwise fails with the list of blockers. Ask the user before calling. Declarations and " +
         "lodgement are then done by people in the web app; unfinalising is web-only too. Never lodges. " +
         "confirm must be true — only pass it after the user has said to finalise this return.",
       inputSchema: {
@@ -187,8 +187,10 @@ export function register(server: McpServer, api: Api): void {
         "statement, detailed operating statement (income and market movements by holding), notes to the financial " +
         "statements, trustees' declaration, investment summary, tax reconciliation, one member statement per member, " +
         "trustee minutes, trustee representation letter and the return — with headline totals (benefits accrued, " +
-        "income tax expense, net assets, taxable income, whether the tax reconciliation ties to the return). All " +
-        "figures come from the same services as the return. Amounts in AUD.",
+        "income tax expense, net assets, taxable income, whether the tax reconciliation ties to the return) and " +
+        "net_assets_reconciliation: members' opening balances + benefits accrued + rollovers in − benefits paid " +
+        "against net assets at 30 June, with the difference (null without member statements). All figures come " +
+        "from the same services as the return. Amounts in AUD.",
       inputSchema: { fund_id: fundId, financial_year: financialYearKey }
     },
     async ({ fund_id, financial_year }) =>
@@ -274,5 +276,120 @@ export function register(server: McpServer, api: Api): void {
         }),
         `${document ?? "year-end-pack"}-${financial_year}.pdf`
       )
+  );
+
+  const settingsPath = (fund_id: number, financial_year: string, key: string) =>
+    `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack/settings/${key}`;
+  const STANDARD_RESOLUTIONS = [
+    "directors_overseas",
+    "cmc_australia",
+    "no_non_resident_contributions",
+    "events_after_year_end",
+    "late_lodgments"
+  ] as const;
+
+  server.registerTool(
+    "get_year_end_pack_settings",
+    {
+      title: "Get the trustee minutes / signatory settings",
+      annotations: READS,
+      description:
+        "Read what is recorded for one of the year-end pack's signed documents: trustee_minutes (meeting date, " +
+        "place, chair, attendance with absence reasons, optional standard resolutions, custom resolutions — " +
+        "resolved shows who is present and absent, every resolution as it will print, and the signatories), " +
+        "trustees_declaration and trustee_representation_letter (signatories and signing date; with none set they " +
+        "default to the directors present at the minutes' meeting), or notes_to_financial_statements " +
+        "(events after the reporting date).",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        document: z.enum([
+          "trustee_minutes",
+          "trustees_declaration",
+          "trustee_representation_letter",
+          "notes_to_financial_statements"
+        ])
+      }
+    },
+    async ({ fund_id, financial_year, document }) =>
+      toResult(await api("GET", settingsPath(fund_id, financial_year, document)))
+  );
+
+  server.registerTool(
+    "update_trustee_minutes",
+    {
+      title: "Record the year-end trustee meeting",
+      annotations: WRITES,
+      description:
+        "Set the year-end trustee minutes: meeting date, place, chair, who was present and who was absent (with " +
+        "a reason), optional standard resolutions and custom resolutions. Only what you pass changes. Only " +
+        "directors present sign the minutes, and they are the default signatories of the trustees' declaration " +
+        "and representation letter. The contributions resolution is written from the year's actual " +
+        "contributions (none → \"no contributions were received\"). Standard resolutions: directors_overseas " +
+        "(names the absent directors), cmc_australia (central management and control in Australia, by those " +
+        "present), no_non_resident_contributions, events_after_year_end (uses the notes' subsequent events), " +
+        "late_lodgments (with late_lodgments_detail). Refused for a locked year or finalised minutes.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        meeting_date: z.string().optional().describe("ISO date, e.g. 2026-11-10"),
+        location: z.string().optional().describe("Where the meeting was held"),
+        chair: z.string().optional().describe("Chair's name (defaults to the first director present)"),
+        present: z.array(z.string()).optional().describe("Names of directors/trustees present"),
+        absent: z
+          .array(z.object({ name: z.string(), reason: z.string().optional() }))
+          .optional()
+          .describe("Directors/trustees absent, with the reason (e.g. \"resident overseas since 2023\")"),
+        standard_resolutions: z
+          .array(z.enum(STANDARD_RESOLUTIONS))
+          .optional()
+          .describe("Standard resolutions to include (replaces the current selection)"),
+        late_lodgments_detail: z.string().optional().describe("What was lodged late, for the late_lodgments resolution"),
+        custom_resolutions: z.array(z.string()).optional().describe("Extra resolutions, each starting \"That …\" (replaces the current list)")
+      }
+    },
+    async ({ fund_id, financial_year, present, absent, standard_resolutions, custom_resolutions, ...rest }) => {
+      const answers: Record<string, unknown> = { ...rest };
+      if (present || absent) {
+        answers.attendance = [
+          ...(present ?? []).map((name) => ({ name, present: "yes", absence_reason: "" })),
+          ...(absent ?? []).map((a) => ({ name: a.name, present: "no", absence_reason: a.reason ?? "" }))
+        ];
+      }
+      if (standard_resolutions) {
+        for (const key of STANDARD_RESOLUTIONS) answers[`res_${key}`] = standard_resolutions.includes(key) ? "yes" : "";
+      }
+      if (custom_resolutions) answers.custom_resolutions = custom_resolutions.join("\n");
+      return toResult(await api("PATCH", settingsPath(fund_id, financial_year, "trustee_minutes"), { body: { answers } }));
+    }
+  );
+
+  server.registerTool(
+    "update_pack_signatories",
+    {
+      title: "Set who signs the declaration or representation letter",
+      annotations: WRITES,
+      description:
+        "Set the signatories (and optionally the signing date) of the trustees' declaration or the trustee " +
+        "representation letter (also the auditor's name for the letter). An empty signatories list returns to " +
+        "the default: the directors present at the year-end trustee meeting. Refused for a locked year or a " +
+        "finalised document.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        document: z.enum(["trustees_declaration", "trustee_representation_letter"]),
+        signatories: z
+          .array(z.object({ name: z.string(), role: z.string().optional() }))
+          .optional()
+          .describe("Who signs; role defaults to Director/Trustee"),
+        signed_on: z.string().optional().describe("ISO date signed"),
+        auditor_name: z.string().optional().describe("Representation letter only: auditor addressed")
+      }
+    },
+    async ({ fund_id, financial_year, document, signatories, ...rest }) => {
+      const answers: Record<string, unknown> = { ...rest };
+      if (signatories) answers.signatories = signatories.map((s) => ({ name: s.name, role: s.role ?? "" }));
+      return toResult(await api("PATCH", settingsPath(fund_id, financial_year, document), { body: { answers } }));
+    }
   );
 }

@@ -23,13 +23,14 @@ import { register as register_documents } from "./tools/documents.js";
 import { register as register_costs_prices } from "./tools/costs_prices.js";
 import { register as register_cash } from "./tools/cash.js";
 import { register as register_smsf_return } from "./tools/smsf_return.js";
-import { register as register_year_end_review } from "./tools/year_end_review.js";
+import { register as register_checks } from "./tools/checks.js";
 import { register as register_financial_years } from "./tools/financial_years.js";
 import { register as register_balance_items } from "./tools/balance_items.js";
 import { register as register_member_statements } from "./tools/member_statements.js";
 import { register as register_valuations } from "./tools/valuations.js";
 import { register as register_fund_admin } from "./tools/fund_admin.js";
 import { register as register_year_end_pack } from "./tools/year_end_pack.js";
+import { register as register_compliance_documents } from "./tools/compliance_documents.js";
 import { register as register_navigation } from "./tools/navigation.js";
 
 // ── Server + tools ─────────────────────────────────────────────────────────
@@ -50,13 +51,14 @@ register_documents(server, api);
 register_costs_prices(server, api);
 register_cash(server, api);
 register_smsf_return(server, api);
-register_year_end_review(server, api);
+register_checks(server, api);
 register_financial_years(server, api);
 register_balance_items(server, api);
 register_member_statements(server, api);
 register_valuations(server, api);
 register_fund_admin(server, api);
 register_year_end_pack(server, api);
+register_compliance_documents(server, api);
 register_navigation(server, api);
 
 // ── Startup ────────────────────────────────────────────────────────────────

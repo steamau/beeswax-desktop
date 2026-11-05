@@ -25,7 +25,7 @@ async function withServer(fn) {
       res.end(FAKE_PDF);
     } else if (req.url.includes("/finalise")) {
       res.writeHead(422, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Can't finalise yet: Lock the year-end review (step 1) first." }));
+      res.end(JSON.stringify({ error: "Can't finalise yet: Fix or accept 2 blocking checks." }));
     } else {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, path: req.url }));
@@ -93,7 +93,7 @@ test("sign-off tools post to the return endpoints and surface a 422", async () =
       arguments: { fund_id: 1, smsf_return_id: 9, confirm: true }
     });
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /Lock the year-end review/);
+    assert.match(result.content[0].text, /blocking checks/);
   });
 });
 

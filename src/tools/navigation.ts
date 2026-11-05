@@ -21,7 +21,7 @@ export function register(server: McpServer, api: Api): void {
         "\"sign off\", \"bank feed\", \"API token\"); omit it to get the whole map. Pass fund_id (and optionally " +
         "financial_year, holding_id, bank_account_id) to get ready-to-click `url`s; otherwise pages come back " +
         "as `url_template`s listing the ids they `needs`. For one specific record (a holding, transaction, bank " +
-        "account, return section or field, year-end review check) use the `web_url` on that record from the " +
+        "account, return section or field, check) use the `web_url` on that record from the " +
         "tool that returned it instead.",
       inputSchema: {
         query: z.string().optional().describe("Words describing what the user wants to see or do; all must match"),

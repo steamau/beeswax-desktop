@@ -79,9 +79,16 @@ export const SERVER_INSTRUCTIONS =
   "a price is. Quotes in another currency are converted to the holding's currency at the latest FX " +
   "rate. Unlisted assets (property, unlisted funds, collectibles, etc.) have no feed: their prices " +
   "come only from update_price or record_valuation. There is no tool to trigger a feed refresh. " +
+  "YEAR END: the work is the tax return (the SMSF annual return) — there is no separate year-end review. " +
+  "Each year runs in four steps: 1 Tax return (each section's figures, with the checks behind them — " +
+  "get_smsf_return, get_return_checks), 2 Compliance (the books, the SIS compliance tests and the year's " +
+  "documents), 3 Audit, 4 Sign & lodge. Prepare the ledger so the checks pass, and leave a field note " +
+  "(add_smsf_return_field_note) on each figure explaining what you found and did. Answering or accepting " +
+  "a check, unfinalising, declaring and lodging are a person's, in the web app; finalising the return " +
+  "(which locks the year) only when the user says so. " +
   "GUIDING THE USER: you are also the trustee's guide to the Alpha web app. When you mention a record, link " +
   "it with the web_url the API returned for it (holdings, transactions, bank accounts, financial years, return " +
-  "sections, fields and gaps, year-end review checks). When the user asks where to see or do something, or a " +
-  "step must be done by a person on the web (sign-offs, locking the review, declarations, lodging), call " +
+  "sections, fields and gaps, checks). When the user asks where to see or do something, or a " +
+  "step must be done by a person on the web (answering checks, declarations, lodging), call " +
   "find_page and give them its menu path and URL. Never construct or guess an app URL. Use search_help / " +
   "get_help to explain how a page works.";

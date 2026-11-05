@@ -125,9 +125,9 @@ export function register(server: McpServer, api: Api): void {
       title: "Close financial year",
       annotations: WRITES,
       description:
-        "Close a financial year — locks its year-end review and every dated row in that year against further " +
-        "edits. Only works once every check in the year-end review has been signed off by a person in the web " +
-        "app; otherwise returns an error with the outstanding checks (see get_year_end_review).",
+        "Close a financial year that has no tax return in Alpha (history lodged elsewhere) — locks every dated " +
+        "row in that year against further edits. A year with a tax return closes when the return is finalised " +
+        "(finalise_smsf_return); this tool refuses it and returns the return's finalise blockers.",
       inputSchema: { fund_id: fundId, financial_year: financialYearKey }
     },
     async ({ fund_id, financial_year }) =>
@@ -155,8 +155,8 @@ export function register(server: McpServer, api: Api): void {
       title: "Reopen financial year",
       annotations: WRITES,
       description:
-        "Reopen a closed financial year (back to open), unlocking its year-end review and its rows for edits. " +
-        "Refused while the year's return is finalised — reopen the return first. To revert a lodged year use " +
+        "Reopen a closed financial year (back to open), unlocking its rows for edits. " +
+        "Refused while the year's tax return is finalised — reopening the return (web app) reopens the year. To revert a lodged year use " +
         "unlodge_financial_year first.",
       inputSchema: { fund_id: fundId, financial_year: financialYearKey }
     },

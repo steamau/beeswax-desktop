@@ -112,9 +112,11 @@ export function register(server: McpServer, api: Api): void {
         "payment for the days remaining after it. Dated flows come from cash transactions attributed to the member; " +
         "a member whose statement shows flows with none dated falls back to the opening balance and the response " +
         "says so (per member: method_used, weight, share, note). Shares sum exactly to the total (the rounding cent " +
-        "goes to the largest member). Omit total_earnings to use the operating statement's net result less " +
-        "contributions (investment income + realised gains − expenses − income tax; excludes unrealised movements). " +
-        "Use dry_run to preview. Members with no statement get no share — create their statements first. AUD.",
+        "goes to the largest member). Omit total_earnings to use the net-assets roll-forward: net assets at 30 June " +
+        "less each member's opening balance and non-earnings movements (contributions, rollovers, benefits, " +
+        "contributions tax), so closing balances equal net assets; it includes unrealised movements and tax. The " +
+        "response's earnings_figures gives that figure, the operating statement's (benefits accrued after tax − " +
+        "contributions + contributions tax) and the difference between them. Use dry_run to preview. Members with no statement get no share — create their statements first. AUD.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,

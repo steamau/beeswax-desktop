@@ -116,4 +116,54 @@ export function register(server: McpServer, api: Api): void {
         )
       )
   );
+
+  server.registerTool(
+    "get_tax_position",
+    {
+      title: "Get the year's tax position",
+      annotations: READS,
+      description:
+        "Read a financial year's tax position — the facts the ledger can't derive that feed the return's losses " +
+        "schedule and calculation statement: prior_year_capital_loss_bf, net_capital_loss_cf, tax_losses_bf, " +
+        "paygi_instalments_raised (item 13 K), supervisory_levy (L), tfn_withholding_credit (H), " +
+        "no_tfn_contributions_tax (J), ecpi_method and actuarial_percentage. recorded:false means none is " +
+        "saved yet (the review's tax_position_recorded check stays red). Amounts in AUD.",
+      inputSchema: { fund_id: fundId, financial_year: financialYearKey }
+    },
+    async ({ fund_id, financial_year }) =>
+      toResult(await api("GET", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/tax_position`))
+  );
+
+  server.registerTool(
+    "update_tax_position",
+    {
+      title: "Record the year's tax position",
+      annotations: WRITES,
+      description:
+        "Create or update a financial year's tax position; only the fields you pass change. Feeds the return's " +
+        "losses schedule and calculation statement and clears the review checks tax_position_recorded and " +
+        "capital_losses_brought_forward when the figures agree with last year's return. A new position defaults " +
+        "the supervisory levy to the year's rate. Refused for a closed or lodged year. The fund's TFN is not part " +
+        "of the tax position and can't be set through the API — the trustee enters it on the web. AUD.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        prior_year_capital_loss_bf: z.number().nonnegative().optional().describe("Net capital losses brought forward from prior years"),
+        net_capital_loss_cf: z.number().nonnegative().optional().describe("Net capital losses carried forward to later years"),
+        tax_losses_bf: z.number().nonnegative().optional().describe("Tax losses brought forward"),
+        paygi_instalments_raised: z.number().nonnegative().optional().describe("PAYG instalments raised for the year (13 K)"),
+        supervisory_levy: z.number().nonnegative().optional().describe("Supervisory levy (13 L)"),
+        tfn_withholding_credit: z.number().nonnegative().optional().describe("Credit for TFN amounts withheld (13 H)"),
+        no_tfn_contributions_tax: z.number().nonnegative().optional().describe("Tax on no-TFN-quoted contributions (13 J)"),
+        ecpi_method: z.enum(["none", "segregated", "unsegregated"]).optional().describe("Exempt current pension income method"),
+        actuarial_percentage: z.number().min(0).max(100).optional().describe("Actuarial certificate exempt %, unsegregated method")
+      }
+    },
+    async ({ fund_id, financial_year, ...fields }) =>
+      toResult(
+        await api("PATCH", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/tax_position`, {
+          body: { tax_position: fields }
+        })
+      )
+  );
 }

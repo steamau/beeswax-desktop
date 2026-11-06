@@ -36,18 +36,20 @@ export function register(server: McpServer, api: Api): void {
       title: "Import ATO statement",
       annotations: WRITES,
       description:
-        "Import an ATO account statement: the JSON the ATO Online services portal's Transactions page returns " +
-        "(TransactionStatements: response.transactionDetail[]). Pass file_path to a saved .json file, or the JSON " +
-        "itself as statement_json. Idempotent — lines already imported are matched on the ATO's transaction id, " +
-        "so re-importing an overlapping range adds nothing. Afterwards Alpha checks its running balance against " +
+        "Import an ATO account statement from the ATO Online services portal's Transactions page: the CSV its " +
+        "Download button saves, or the JSON the page returns (TransactionStatements: response.transactionDetail[]). " +
+        "Pass file_path to the saved .csv or .json file, or the text itself as statement_json. Prefer the JSON when " +
+        "the user has it: it links GIC remissions to their charges, so the 30 June position is exact (a position " +
+        "built from the CSV says when it isn't). Idempotent — lines already imported are matched, and a JSON import " +
+        "upgrades lines first imported from the CSV, so re-importing an overlapping range adds nothing. Afterwards Alpha checks its running balance against " +
         "the ATO's on every line (reconciled: false names the first line that differs) and proposes bank rows " +
         "for ATO payments and refunds (confirm them with match_ato_payment). A statement for a different ATO " +
         "account is refused.",
       inputSchema: {
         fund_id: fundId,
         ato_account_id: atoAccountId,
-        file_path: z.string().optional().describe("Absolute path to the saved TransactionStatements .json file"),
-        statement_json: z.string().optional().describe("The TransactionStatements JSON as text (instead of file_path)")
+        file_path: z.string().optional().describe("Absolute path to the saved Download .csv or TransactionStatements .json file"),
+        statement_json: z.string().optional().describe("The statement's text — the JSON or the Download CSV (instead of file_path)")
       }
     },
     async ({ fund_id, ato_account_id, file_path, statement_json }) => {

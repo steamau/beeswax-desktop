@@ -1,0 +1,211 @@
+import { readFile } from "node:fs/promises";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import type { Api } from "../api.js";
+import { toResult } from "../api.js";
+import { fundId, isoDate, pageParam, perPageParam, READS, WRITES } from "../shared.js";
+
+const atoAccountId = z
+  .number()
+  .int()
+  .positive()
+  .describe("ATO account ID (find via list_ato_accounts)");
+
+// The fund's accounts with the Tax Office — income tax (551), activity statement
+// (001, the Integrated Client Account), superannuation (552) — mirrored line by
+// line from the ATO's own statements. Descriptions are the ATO's text from a file
+// the user supplied, so results that carry them are fenced as untrusted data.
+export function register(server: McpServer, api: Api): void {
+  server.registerTool(
+    "list_ato_accounts",
+    {
+      title: "List ATO accounts",
+      annotations: READS,
+      description:
+        "List the fund's ATO accounts (income tax 551, activity statement 001, superannuation 552) with their " +
+        "balance (positive = owed to the ATO, negative = the ATO owes the fund), how far the imported statement " +
+        "reaches, and whether Alpha's running balance agrees with the ATO's. Use to find an ato_account_id.",
+      inputSchema: { fund_id: fundId }
+    },
+    async ({ fund_id }) => toResult(await api("GET", `/funds/${fund_id}/ato_accounts`))
+  );
+
+  server.registerTool(
+    "import_ato_statement",
+    {
+      title: "Import ATO statement",
+      annotations: WRITES,
+      description:
+        "Import an ATO account statement: the JSON the ATO Online services portal's Transactions page returns " +
+        "(TransactionStatements: response.transactionDetail[]). Pass file_path to a saved .json file, or the JSON " +
+        "itself as statement_json. Idempotent — lines already imported are matched on the ATO's transaction id, " +
+        "so re-importing an overlapping range adds nothing. Afterwards Alpha checks its running balance against " +
+        "the ATO's on every line (reconciled: false names the first line that differs) and proposes bank rows " +
+        "for ATO payments and refunds (confirm them with match_ato_payment). A statement for a different ATO " +
+        "account is refused.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        file_path: z.string().optional().describe("Absolute path to the saved TransactionStatements .json file"),
+        statement_json: z.string().optional().describe("The TransactionStatements JSON as text (instead of file_path)")
+      }
+    },
+    async ({ fund_id, ato_account_id, file_path, statement_json }) => {
+      let statement = statement_json;
+      let filename: string | undefined;
+      if (file_path) {
+        try {
+          statement = await readFile(file_path, "utf8");
+          filename = file_path.split(/[\\/]/).pop();
+        } catch (err) {
+          throw new Error(`Could not read file at ${file_path}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (!statement) {
+        throw new Error("Pass file_path or statement_json.");
+      }
+      return toResult(
+        await api("POST", `/funds/${fund_id}/ato_accounts/${ato_account_id}/import`, {
+          body: { statement, filename }
+        })
+      );
+    }
+  );
+
+  server.registerTool(
+    "list_ato_transactions",
+    {
+      title: "List ATO transactions",
+      annotations: READS,
+      description:
+        "List an ATO account's statement lines, newest first, each with the ATO's running balance and Alpha's " +
+        "beside it. By default only the lines that carry the balance (parents and single lines); pass " +
+        "include_children to add the per-period breakdown (GST, PAYG instalment, GIC lines). Amounts: positive " +
+        "= DR (owed to the ATO), negative = CR. Filter by category (activity_statement_raised, " +
+        "income_tax_assessed, payment, refund, general_interest_charge, penalty, remission, " +
+        "interest_on_overpayment, transfer_between_ato_accounts, other), match_status or processed-date range.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        category: z.string().optional().describe("Filter by category"),
+        match_status: z
+          .enum(["unmatched", "proposed", "matched", "ignored"])
+          .optional()
+          .describe("Bank match status (payments and refunds)"),
+        from: isoDate("Earliest processed date (inclusive)").optional(),
+        to: isoDate("Latest processed date (inclusive)").optional(),
+        include_children: z.boolean().optional().describe("Also list the breakdown lines under each parent"),
+        page: pageParam,
+        per_page: perPageParam
+      }
+    },
+    async ({ fund_id, ato_account_id, ...query }) =>
+      toResult(await api("GET", `/funds/${fund_id}/ato_accounts/${ato_account_id}/ato_transactions`, { query }), {
+        untrusted: true
+      })
+  );
+
+  server.registerTool(
+    "get_ato_position",
+    {
+      title: "Get ATO position",
+      annotations: READS,
+      description:
+        "Where an ATO account stood on a date (default the last 30 June), using every line the ATO has processed " +
+        "to today: `owed` for periods ended (for the activity statement, the Integrated Client Account balance), " +
+        "broken down into general interest charge, penalties and each income year's periods; and `accrued` — " +
+        "activity statement amounts for periods ended by the date but not yet due (GST / PAYG instalment payable " +
+        "for the June quarter). GIC remitted after the date nets to nil. Positive = owed to the ATO. These are the " +
+        "figures for the year's balance items.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        as_at: isoDate("Position date (default the last 30 June)").optional()
+      }
+    },
+    async ({ fund_id, ato_account_id, as_at }) =>
+      toResult(await api("GET", `/funds/${fund_id}/ato_accounts/${ato_account_id}/position`, { query: { as_at } }))
+  );
+
+  server.registerTool(
+    "update_ato_transaction",
+    {
+      title: "Update ATO transaction",
+      annotations: WRITES,
+      description:
+        "Correct how an ATO statement line is treated: its category (a person's category survives re-import), a " +
+        "note, or reverses_id — the line a remission or amendment reverses (same account). The amount, dates and " +
+        "description are the ATO's and can't be changed; re-import the statement instead.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        ato_transaction_id: z.number().int().positive().describe("Alpha's id for the line (from list_ato_transactions)"),
+        category: z
+          .enum([
+            "activity_statement_raised",
+            "income_tax_assessed",
+            "payment",
+            "refund",
+            "general_interest_charge",
+            "penalty",
+            "remission",
+            "interest_on_overpayment",
+            "transfer_between_ato_accounts",
+            "other"
+          ])
+          .optional(),
+        note: z.string().optional(),
+        reverses_id: z.number().int().positive().optional().describe("Alpha's id of the line this one reverses")
+      }
+    },
+    async ({ fund_id, ato_account_id, ato_transaction_id, ...ato_transaction }) =>
+      toResult(
+        await api("PATCH", `/funds/${fund_id}/ato_accounts/${ato_account_id}/ato_transactions/${ato_transaction_id}`, {
+          body: { ato_transaction }
+        })
+      )
+  );
+
+  server.registerTool(
+    "match_ato_payment",
+    {
+      title: "Match ATO payment",
+      annotations: WRITES,
+      description:
+        "Settle which bank row paid an ATO payment (or received an ATO refund). match_action: \"find\" proposes " +
+        "bank rows for every unmatched ATO payment and refund in the fund (same amount, within 5 days, PRN " +
+        "preferred); \"confirm\" accepts the proposed row, or the cash_transaction_id you give (the amount must " +
+        "be equal), marking both matched; \"ignore\" rejects the proposal; \"unmatch\" undoes a match or an " +
+        "ignore. Confirm only what the user has agreed or what you have checked against the bank statement.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        match_action: z.enum(["find", "confirm", "ignore", "unmatch"]),
+        ato_transaction_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Alpha's id for the ATO payment or refund line (required except for find)"),
+        cash_transaction_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("For confirm: the bank row, when it isn't the proposed one")
+      }
+    },
+    async ({ fund_id, ato_account_id, match_action, ato_transaction_id, cash_transaction_id }) => {
+      const base = `/funds/${fund_id}/ato_accounts/${ato_account_id}`;
+      if (match_action === "find") return toResult(await api("POST", `${base}/match_payments`));
+      if (!ato_transaction_id) {
+        throw new Error(`ato_transaction_id is required for ${match_action}`);
+      }
+      return toResult(
+        await api("POST", `${base}/ato_transactions/${ato_transaction_id}/match`, {
+          body: { match_action, cash_transaction_id }
+        })
+      );
+    }
+  );
+}

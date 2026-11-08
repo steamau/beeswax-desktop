@@ -118,6 +118,36 @@ export function register(server: McpServer, api: Api): void {
   );
 
   server.registerTool(
+    "apply_ato_balance_items",
+    {
+      title: "Link balance items to the ATO accounts",
+      annotations: WRITES,
+      description:
+        "Take a financial year's ATO balance-sheet lines from the fund's imported ATO accounts instead of typing " +
+        "them: the activity statement's integrated client account (bucket \"ica\"), the quarter's GST and PAYG " +
+        "instalment accrued at 30 June (buckets \"gst\", \"payg_instalment\"), and the income tax / super " +
+        "accounts, each at its 30 June position (get_ato_position). Written lines have source \"ato_position\" " +
+        "with their ato_account_id + ato_bucket and follow later imports when applied again. Pass replace with the " +
+        "ids of typed lines (list_balance_items) they stand in for, to discard those in the same step. dry_run " +
+        "defaults to true: it returns the lines it would write (with the recorded line each updates), the derived " +
+        "lines it would drop and the typed lines it would replace, and writes nothing. Show the user, then call " +
+        "again with dry_run: false. Rejected if the year is closed or lodged.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        replace: z.array(z.number().int()).optional().describe("Ids of typed balance items these lines replace"),
+        dry_run: z.boolean().default(true).describe("true (default): preview only, nothing written")
+      }
+    },
+    async ({ fund_id, financial_year, replace, dry_run }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/balance_items/ato_position`, {
+          body: { replace: replace ?? [], dry_run: dry_run !== false }
+        })
+      )
+  );
+
+  server.registerTool(
     "get_tax_position",
     {
       title: "Get the year's tax position",

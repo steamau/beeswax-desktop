@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Api } from "../api.js";
 import { toResult } from "../api.js";
-import { fundId, isoDate, pageParam, perPageParam, READS, WRITES } from "../shared.js";
+import { fundId, isoDate, pageParam, perPageParam, READS, WRITES, WRITES_DESTRUCTIVE } from "../shared.js";
 
 const atoAccountId = z
   .number()
@@ -44,7 +44,9 @@ export function register(server: McpServer, api: Api): void {
         "upgrades lines first imported from the CSV, so re-importing an overlapping range adds nothing. Afterwards Alpha checks its running balance against " +
         "the ATO's on every line (reconciled: false names the first line that differs) and proposes bank rows " +
         "for ATO payments and refunds (confirm them with match_ato_payment). A statement for a different ATO " +
-        "account is refused.",
+        "account is refused, by its header or, when the CSV has no title lines, by what its lines say (activity " +
+        "statement lines can't go into the income tax account, or income tax lines into the activity statement " +
+        "account); the error names the account it looks like. Imported into the wrong account? Use undo_ato_import.",
       inputSchema: {
         fund_id: fundId,
         ato_account_id: atoAccountId,
@@ -176,9 +178,12 @@ export function register(server: McpServer, api: Api): void {
       description:
         "Settle which bank row paid an ATO payment (or received an ATO refund). match_action: \"find\" proposes " +
         "bank rows for every unmatched ATO payment and refund in the fund (same amount, within 5 days, PRN " +
-        "preferred); \"confirm\" accepts the proposed row, or the cash_transaction_id you give (the amount must " +
-        "be equal), marking both matched; \"ignore\" rejects the proposal; \"unmatch\" undoes a match or an " +
-        "ignore. Confirm only what the user has agreed or what you have checked against the bank statement.",
+        "preferred; when no single row fits, several rows of one day or one unique combination that add up to it, " +
+        "e.g. seven BPAYs paid as one ATO payment); \"confirm\" accepts the proposed row(s), or the " +
+        "cash_transaction_id you give (the amount must be equal), or cash_transaction_ids for several rows that " +
+        "together add up exactly to the ATO line, marking both sides matched; \"ignore\" rejects the proposal; " +
+        "\"unmatch\" undoes a match or an ignore. Confirm only what the user has agreed or what you have checked " +
+        "against the bank statement.",
       inputSchema: {
         fund_id: fundId,
         ato_account_id: atoAccountId,
@@ -194,10 +199,15 @@ export function register(server: McpServer, api: Api): void {
           .int()
           .positive()
           .optional()
-          .describe("For confirm: the bank row, when it isn't the proposed one")
+          .describe("For confirm: the bank row, when it isn't the proposed one"),
+        cash_transaction_ids: z
+          .array(z.number().int().positive())
+          .min(2)
+          .optional()
+          .describe("For confirm: several bank rows that together paid this ATO line (their amounts must add up to it)")
       }
     },
-    async ({ fund_id, ato_account_id, match_action, ato_transaction_id, cash_transaction_id }) => {
+    async ({ fund_id, ato_account_id, match_action, ato_transaction_id, cash_transaction_id, cash_transaction_ids }) => {
       const base = `/funds/${fund_id}/ato_accounts/${ato_account_id}`;
       if (match_action === "find") return toResult(await api("POST", `${base}/match_payments`));
       if (!ato_transaction_id) {
@@ -205,9 +215,77 @@ export function register(server: McpServer, api: Api): void {
       }
       return toResult(
         await api("POST", `${base}/ato_transactions/${ato_transaction_id}/match`, {
-          body: { match_action, cash_transaction_id }
+          body: { match_action, cash_transaction_id, cash_transaction_ids }
         })
       );
     }
+  );
+
+  server.registerTool(
+    "create_ato_account",
+    {
+      title: "Create ATO account",
+      annotations: WRITES,
+      description:
+        "Add one of the fund's accounts with the Tax Office: income_tax (551), activity_statement (001, the " +
+        "Integrated Client Account — a fund registered for GST or paying PAYG instalments has one) or " +
+        "superannuation (552). A fund has at most one of each; asking for a type it already has is refused. " +
+        "Alpha also adds the activity statement account by itself when the fund is GST-registered or pays PAYG " +
+        "instalments, so check list_ato_accounts first. Import its statement afterwards with import_ato_statement.",
+      inputSchema: {
+        fund_id: fundId,
+        account_type: z.enum(["income_tax", "activity_statement", "superannuation"]).describe("Which ATO account"),
+        display_name: z.string().max(100).optional().describe("Defaults to e.g. \"Activity statement (001)\"")
+      }
+    },
+    async ({ fund_id, account_type, display_name }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/ato_accounts`, { body: { ato_account: { account_type, display_name } } })
+      )
+  );
+
+  server.registerTool(
+    "list_ato_imports",
+    {
+      title: "List ATO imports",
+      annotations: READS,
+      description:
+        "List the statement imports into an ATO account, newest first: file, dates covered, lines created / " +
+        "updated / unchanged, whether the balance agreed with the ATO's afterwards, and whether each can be " +
+        "undone (can_undo, undo_blockers). Use to find the import_id for undo_ato_import.",
+      inputSchema: { fund_id: fundId, ato_account_id: atoAccountId }
+    },
+    async ({ fund_id, ato_account_id }) =>
+      toResult(await api("GET", `/funds/${fund_id}/ato_accounts/${ato_account_id}/imports`), { untrusted: true })
+  );
+
+  server.registerTool(
+    "undo_ato_import",
+    {
+      title: "Undo ATO import",
+      annotations: WRITES_DESTRUCTIVE,
+      description:
+        "DESTRUCTIVE: take an ATO statement import back out of its account — deletes every line that import " +
+        "created and puts back the opening balance and date it replaced. Lines it only updated or found " +
+        "unchanged, and lines typed in by hand, stay. dry_run defaults to true: it returns the preview (lines " +
+        "removed, their processed-date range, the balance and opening balance before and after, blockers) and " +
+        "writes nothing. Show the user the preview and get their go-ahead before calling again with dry_run: " +
+        "false. Refused (blockers) when a line it created is matched to a bank row (unmatch it first with " +
+        "match_ato_payment), when a financial year it touches is closed or lodged, or when a later import " +
+        "covers the same lines (undo that one first). Audit-logged with your reasoning and the removed lines.",
+      inputSchema: {
+        fund_id: fundId,
+        ato_account_id: atoAccountId,
+        import_id: z.number().int().positive().describe("The import to undo (from list_ato_imports)"),
+        dry_run: z.boolean().default(true).describe("true (default): preview only, nothing written")
+      }
+    },
+    async ({ fund_id, ato_account_id, import_id, dry_run }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/ato_accounts/${ato_account_id}/imports/${import_id}/undo`, {
+          body: { dry_run: dry_run !== false }
+        }),
+        { untrusted: true } // blockers quote the ATO's line descriptions
+      )
   );
 }

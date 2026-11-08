@@ -7,9 +7,10 @@ import { toResult } from "../api.js";
 import { fundId, isoDate, pageParam, perPageParam, READS, WRITES, WRITES_DESTRUCTIVE } from "../shared.js";
 import { apiBinary, exportDir } from "./year_end_pack.js";
 
-// Alpha runs no AI of its own. CSV statements are imported server-side; a PDF is
-// read by the model on this side of MCP (download_document → read the file →
-// submit_document_lines), and the server validates, scrubs and reconciles the lines.
+// CSV statements are imported server-side, and so are PDF bank statements when the
+// server has an Anthropic key (Documents::PdfReader). Any other PDF is read by the
+// model on this side of MCP (download_document → read the file → submit_document_lines),
+// and the server validates, scrubs and reconciles the lines.
 
 const num = z.number().nullable().optional();
 const str = z.string().nullable().optional();
@@ -52,9 +53,10 @@ export function register(server: McpServer, api: Api): void {
       description:
         "Upload a local PDF or CSV (broker statement, contract note, dividend statement, annual tax statement) " +
         "into the fund's document store. Reads the file from disk, base64-encodes it and posts it. A CSV is " +
-        "imported and reconciled automatically (poll get_document). A PDF is NOT read by the server: after " +
-        "uploading, read the PDF yourself and post its lines with submit_document_lines. Bank statements are " +
-        "uploaded from the bank account in the web app; read one already uploaded with download_document.",
+        "imported and reconciled automatically (poll get_document). A PDF of this kind is NOT read by the server: " +
+        "after uploading, read the PDF yourself and post its lines with submit_document_lines (the response's " +
+        "next_step says so). Bank statements are uploaded from the bank account in the web app, where a PDF is " +
+        "read automatically; if one is still 'uploaded' (or 'failed'), read it with download_document.",
       inputSchema: {
         fund_id: fundId,
         file_path: z.string().describe("Absolute path to the local PDF or CSV file"),

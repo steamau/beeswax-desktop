@@ -39,7 +39,7 @@ Statement lines, cash narrations, document titles and extraction errors originat
 | `update_holding` | Edit an existing holding's fields (e.g. correct a property's cost base via `purchase_price`) |
 | `record_trade` | Record a buy/sell directly to the ledger (idempotent via `external_ref`) |
 | `record_income` | Record a dividend/distribution/interest/rental income directly to the ledger |
-| `upload_document` | Upload a local PDF/CSV statement; a CSV imports + reconciles automatically, a PDF waits for `submit_document_lines` |
+| `upload_document` | Upload a local PDF/CSV statement; a CSV imports + reconciles automatically, a PDF waits for `submit_document_lines` (a PDF *bank* statement uploaded on the web is read server-side when configured) |
 | `download_document` | Save an uploaded document's original file locally (e.g. one uploaded on the web) so the assistant can read it |
 | `submit_document_lines` | Post the lines the assistant read from a statement; Alpha validates, scrubs and reconciles them like a CSV import |
 | `get_document` | Document + extracted statement lines with match statuses |

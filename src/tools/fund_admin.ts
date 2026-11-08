@@ -78,7 +78,8 @@ export function register(server: McpServer, api: Api): void {
         ),
         name: z.string().optional().describe("Fund name as registered"),
         abn: z.string().optional().describe("Australian business number, 11 digits (spaces allowed)"),
-        establishment_date: isoDate("Date the fund was established").optional(),
+        establishment_date: isoDate("Date the fund was established (the return's 5 C first-return answer comes from it)").optional(),
+        wound_up_on: isoDate("Date the fund was wound up, if it has been (the return's item 9 comes from it)").optional(),
         esa_alias: z.string().optional().describe("Electronic service address alias (item 7 C)"),
         postal_address_line1: z.string().optional(),
         postal_address_line2: z.string().optional(),
@@ -118,6 +119,11 @@ export function register(server: McpServer, api: Api): void {
         opening_balance_date: isoDate("Date the opening balance applies from").optional(),
         account_role: z.enum(["operating", "term_deposit", "pension", "contributions", "ato"]).optional(),
         status: z.enum(["active", "inactive", "closed"]).optional(),
+        closed_on: isoDate(
+          "Last day the account was open. Closes it (status becomes closed); the ledger can't hold movements " +
+            "after it. Later years drop the account; the year it closed in proves a nil 30 June balance. " +
+            "Reopen by setting status active."
+        ).optional(),
         notes: z.string().optional()
       }
     },

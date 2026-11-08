@@ -44,6 +44,7 @@ export function register(server: McpServer, api: Api): void {
           .enum(["active", "inactive", "closed"])
           .optional()
           .describe('Account status (default "active")'),
+        closed_on: isoDate("Last day the account was open, for an account that's already closed").optional(),
         bsb: z.string().optional().describe("BSB (stored encrypted)"),
         account_number_masked: z.string().optional().describe("Account number / masked number"),
         account_holder_name: z.string().optional().describe("Account holder name (stored encrypted)"),

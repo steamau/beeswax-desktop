@@ -35,3 +35,49 @@ test("ATO account tools are registered with annotations", async () => {
     await client.close();
   }
 });
+
+test("ATO import undo and account creation tools", async () => {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ["dist/index.js"],
+    env: { ...process.env, BEESWAX_API_TOKEN: "test-token", BEESWAX_URL: "http://127.0.0.1:1" }
+  });
+  const client = new Client({ name: "ato-undo-test", version: "0.0.0" });
+  await client.connect(transport);
+  try {
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((t) => [t.name, t]));
+
+    const undo = byName.get("undo_ato_import");
+    assert.ok(undo, "undo_ato_import missing");
+    assert.equal(undo.annotations.readOnlyHint, false);
+    assert.equal(undo.annotations.destructiveHint, true);
+    assert.match(undo.description, /DESTRUCTIVE/);
+    for (const field of ["fund_id", "ato_account_id", "import_id"]) {
+      assert.ok(undo.inputSchema.required.includes(field), `undo_ato_import should require ${field}`);
+    }
+    assert.equal(undo.inputSchema.properties.dry_run.type, "boolean");
+    assert.equal(undo.inputSchema.properties.dry_run.default, true);
+    assert.ok(!undo.inputSchema.required.includes("dry_run"), "dry_run is optional");
+    assert.ok("reasoning" in undo.inputSchema.properties);
+    assert.ok("external_ref" in undo.inputSchema.properties);
+
+    const create = byName.get("create_ato_account");
+    assert.ok(create, "create_ato_account missing");
+    assert.equal(create.annotations.readOnlyHint, false);
+    assert.equal(create.annotations.destructiveHint, false);
+    assert.deepEqual(create.inputSchema.properties.account_type.enum, ["income_tax", "activity_statement", "superannuation"]);
+    assert.ok(create.inputSchema.required.includes("account_type"));
+    assert.ok("reasoning" in create.inputSchema.properties);
+
+    assert.equal(byName.get("list_ato_imports").annotations.readOnlyHint, true);
+
+    // Parameter validation happens before any API call.
+    const bad = await client.callTool({ name: "create_ato_account", arguments: { fund_id: 2, account_type: "other" } });
+    assert.equal(bad.isError, true);
+    const badUndo = await client.callTool({ name: "undo_ato_import", arguments: { fund_id: 2, ato_account_id: 1, import_id: "one" } });
+    assert.equal(badUndo.isError, true);
+  } finally {
+    await client.close();
+  }
+});

@@ -44,6 +44,7 @@ test("server_info reports the version without calling the API", async () => {
     const info = JSON.parse(res.content[0].text);
     assert.equal(info.name, "beeswax-shares");
     assert.equal(info.version, pkg.version);
+    assert.match(info.release_notes, new RegExp(`^${pkg.version.replaceAll(".", "\\.")}:`), "release_notes should lead with this version");
     assert.equal(info.tool_count, manifest.tools.length);
     assert.equal(info.api_base_url, "http://127.0.0.1:1");
   } finally {

@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Api } from "../api.js";
 import { BASE_URL, toResult } from "../api.js";
-import { SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { RELEASE_NOTES, SERVER_NAME, SERVER_VERSION } from "../version.js";
 import { fundId, isoDate, pageParam, perPageParam, READS } from "../shared.js";
 
 export function register(server: McpServer, api: Api): void {
@@ -44,6 +44,7 @@ export function register(server: McpServer, api: Api): void {
     return {
       name: SERVER_NAME,
       version: SERVER_VERSION,
+      release_notes: RELEASE_NOTES,
       tool_count: registered ? Object.keys(registered).length : undefined,
       api_base_url: BASE_URL
     };

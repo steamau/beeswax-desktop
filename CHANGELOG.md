@@ -1,0 +1,38 @@
+# Beeswax Shares MCP server — changelog
+
+## 1.11.0 — 2026-11-09
+- **apply_ato_balance_items** (`dry_run` defaults to true): writes a year's ATO balance-sheet lines from the
+  imported ATO accounts' 30 June position — the activity statement's integrated client account (`ica`), the
+  quarter's GST and PAYG instalment accrued, the income tax and super accounts — as balance items linked by
+  `ato_account_id` + `ato_bucket`, so applying again follows later imports. `replace` discards the typed lines
+  they stand in for in the same step.
+- **match_ato_payment**: `confirm` takes `cash_transaction_ids` for one ATO payment paid by several bank rows
+  (they must add up to it); `find` proposes such splits when no single row fits.
+- **import_ato_statement**: a statement line that can't be stored is a 422 naming the row; any other server
+  failure names the exception and request id instead of a bare "Internal Server Error".
+
+## 1.10.0 — 2026-11-08
+- **generate_compliance_document**: generate one of the year's compliance documents (operating statement,
+  statement of financial position, trustee minutes, declarations …) the way the Compliance step's Generate
+  button does. `answers` fill the document's own fields (the result lists them and any still missing);
+  `finalize: true` freezes it so its check reads Done; `not_applicable: true` marks it N/A. Uploaded types,
+  locked years and already-finalised documents are refused.
+
+## 1.9.0 — 2026-11-07
+- **undo_ato_import** (destructive; `dry_run` defaults to true): takes a statement import back out of an
+  ATO account — removes only the lines it created and restores the opening balance it replaced. Refused
+  while a line is matched to a bank row, a year it touches is closed or lodged, or a later import covers
+  the same lines.
+- **list_ato_imports**: an ATO account's imports, each with `can_undo` and `undo_blockers`.
+- **create_ato_account**: add the fund's income tax (551), activity statement (001) or superannuation (552)
+  account; one of each per fund.
+- **import_ato_statement** refuses a statement whose lines read as another account type (an activity
+  statement into the income tax account, or the reverse), naming the account it looks like.
+- `server_info` reports `release_notes`.
+
+## 1.8.1 — 2026-11-06
+- import_ato_statement takes the portal's Download CSV as well as the JSON.
+
+## 1.8.0
+- ATO account tools: list_ato_accounts, import_ato_statement, list_ato_transactions, get_ato_position,
+  update_ato_transaction, match_ato_payment.

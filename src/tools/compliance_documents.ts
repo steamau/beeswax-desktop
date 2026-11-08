@@ -36,4 +36,42 @@ export function register(server: McpServer, api: Api): void {
         )
       )
   );
+
+  server.registerTool(
+    "generate_compliance_document",
+    {
+      title: "Generate a compliance document",
+      annotations: WRITES,
+      description:
+        "Generate one of the year's generated compliance documents in Alpha — what the Generate button on the " +
+        "Compliance step does (e.g. operating_statement, statement_of_financial_position, trustee_minutes, " +
+        "trustees_declaration; the part after \"compliance_document:\" in a check key). Figures come from the " +
+        "ledger; answers fill the document's own fields (the result lists them, with any still missing). Running it " +
+        "again updates the draft. finalize: true freezes it and its check reads Done (refused while required " +
+        "fields are blank); not_applicable: true marks it N/A instead. Uploaded types (bank statements, signed " +
+        "files) are refused — use upload_document + mark_compliance_document_prepared. Refused for a locked year " +
+        "or a document already finalised (reopen it on the web).",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKeyEarly,
+        document_type: z.string().describe('Compliance document type, e.g. "operating_statement"'),
+        answers: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("Field key → value; repeatable fields take an array of row objects"),
+        title: z.string().optional(),
+        notes: z.string().optional().describe("Internal notes on the document"),
+        finalize: z.boolean().optional().describe("Freeze the document so it counts as done"),
+        not_applicable: z.boolean().optional().describe("Mark it not applicable for this year instead")
+      }
+    },
+    async ({ fund_id, financial_year, document_type, ...body }) =>
+      toResult(
+        await api(
+          "POST",
+          `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/compliance_documents/${encodeURIComponent(document_type)}/generate`,
+          { body }
+        )
+      )
+  );
 }

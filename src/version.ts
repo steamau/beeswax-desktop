@@ -14,7 +14,8 @@ export const SERVER_VERSION: string = pkg.version;
 
 // What changed in this release; server_info reports it. Keep in step with CHANGELOG.md.
 export const RELEASE_NOTES =
-  "1.11.0: apply_ato_balance_items — take a year's ATO balance-sheet lines (activity statement ICA, GST and PAYG " +
-  "instalment accrued, income tax) from the imported ATO accounts, linked by ato_account_id + ato_bucket, " +
-  "replacing typed lines in one step. match_ato_payment confirms one ATO payment against several bank rows " +
-  "(cash_transaction_ids), and find proposes such splits.";
+  "1.12.0: use_ato_position (replaces apply_ato_balance_items) — a year's ATO balance-sheet lines from the imported " +
+  "ATO accounts' 30 June position (ICA owed, June-quarter GST/PAYG accrued, earlier years' income tax; the year " +
+  "being prepared stays with the return), superseding the typed lines they match instead of deleting them; " +
+  "dry_run by default with before → after and the effect on net assets. link_balance_item_to_ato ties one typed " +
+  "line to an ATO account + bucket. get_smsf_return reports ato_position_drift after finalise.";

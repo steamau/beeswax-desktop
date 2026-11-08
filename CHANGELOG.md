@@ -1,5 +1,17 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.12.0 — 2026-11-09
+- **use_ato_position** replaces apply_ato_balance_items (`dry_run` defaults to true): the year's ATO
+  balance-sheet lines from the 30 June position — buckets `owed` (ICA; earlier income years' income tax) and
+  `accrued_<component>` (June-quarter GST, PAYG instalment …). The year being prepared never comes from the
+  income tax account; the return's label S carries it. Typed lines that stand for the same account + bucket
+  are **superseded** (kept, `counted: false`, out of the totals), not discarded; `keep` leaves named ones
+  counting. The preview gives before → after per line, unmatched ATO-looking typed lines and
+  `net_assets_effect`. Derived lines can't be edited by hand.
+- **link_balance_item_to_ato**: tie one typed line to an ATO account + bucket so it is matched by link.
+- **get_smsf_return**: `ato_position_drift` — how the 30 June ATO position has moved since finalise.
+- **list_balance_items**: rows carry `counted`, `superseded_by_id` and, for derived lines, `ato_position_url`.
+
 ## 1.11.0 — 2026-11-09
 - **apply_ato_balance_items** (`dry_run` defaults to true): writes a year's ATO balance-sheet lines from the
   imported ATO accounts' 30 June position — the activity statement's integrated client account (`ica`), the

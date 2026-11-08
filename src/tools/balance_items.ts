@@ -14,7 +14,9 @@ export function register(server: McpServer, api: Api): void {
         "List the trustee-entered balance-sheet lines for a financial year — the figures the investment ledger " +
         "can't derive: other assets (receivables, non-holding plant), borrowings (LRBAs and other loans) and " +
         "other liabilities (ATO accounts, GST, creditors, rent bonds). These feed SMSF return items 15b O, 16 V " +
-        "and 16 Y and the statement of financial position. Returns per-side totals alongside the rows.",
+        "and 16 Y and the statement of financial position. Returns per-side totals alongside the rows. Lines from " +
+        "the ATO position have source \"ato_position\"; typed lines they replaced are listed with counted: false " +
+        "and superseded_by_id, and are left out of the totals.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
@@ -118,32 +120,70 @@ export function register(server: McpServer, api: Api): void {
   );
 
   server.registerTool(
-    "apply_ato_balance_items",
+    "use_ato_position",
     {
-      title: "Link balance items to the ATO accounts",
+      title: "Use the ATO position for the balance sheet",
       annotations: WRITES,
       description:
-        "Take a financial year's ATO balance-sheet lines from the fund's imported ATO accounts instead of typing " +
-        "them: the activity statement's integrated client account (bucket \"ica\"), the quarter's GST and PAYG " +
-        "instalment accrued at 30 June (buckets \"gst\", \"payg_instalment\"), and the income tax / super " +
-        "accounts, each at its 30 June position (get_ato_position). Written lines have source \"ato_position\" " +
-        "with their ato_account_id + ato_bucket and follow later imports when applied again. Pass replace with the " +
-        "ids of typed lines (list_balance_items) they stand in for, to discard those in the same step. dry_run " +
-        "defaults to true: it returns the lines it would write (with the recorded line each updates), the derived " +
-        "lines it would drop and the typed lines it would replace, and writes nothing. Show the user, then call " +
-        "again with dry_run: false. Rejected if the year is closed or lodged.",
+        "Take a financial year's ATO balance-sheet lines from the fund's imported ATO accounts' 30 June position " +
+        "(get_ato_position) instead of typed lines: the activity statement's integrated client account (bucket " +
+        "\"owed\"), each component accrued for the June quarter (\"accrued_gst\", \"accrued_payg_instalment\" …) " +
+        "and the income tax account's balance for EARLIER income years (\"owed\"). The year being prepared always " +
+        "comes from the return (label S), never the income tax account. Derived lines have source \"ato_position\", " +
+        "ato_account_id + ato_bucket and a web_url to the account at 30 June; they can't be edited by hand. Each " +
+        "typed line that stands for the same account + bucket — linked with link_balance_item_to_ato, or else on " +
+        "the same side with a label naming it (ICA, GST, PAYG, income tax), preferring the same amount — is " +
+        "SUPERSEDED: kept for the audit (counted: false), shown struck through, left out of every total. " +
+        "dry_run defaults to true and writes nothing: it returns each line with the typed line it supersedes " +
+        "(before → after), unmatched_typed (ATO-looking typed lines that would keep counting), stale derived " +
+        "lines it would drop and net_assets_effect. Show the user, then call with dry_run: false. Applying again " +
+        "changes nothing unless the ATO position moved. Rejected if the year is closed or lodged; after " +
+        "finalise, get_smsf_return reports ato_position_drift instead.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
-        replace: z.array(z.number().int()).optional().describe("Ids of typed balance items these lines replace"),
-        dry_run: z.boolean().default(true).describe("true (default): preview only, nothing written")
+        dry_run: z.boolean().default(true).describe("true (default): preview only, nothing written"),
+        keep: z
+          .array(z.number().int())
+          .optional()
+          .describe("Ids of matched typed balance items to leave counting instead of superseding")
       }
     },
-    async ({ fund_id, financial_year, replace, dry_run }) =>
+    async ({ fund_id, financial_year, dry_run, keep }) =>
       toResult(
         await api("POST", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/balance_items/ato_position`, {
-          body: { replace: replace ?? [], dry_run: dry_run !== false }
+          body: { keep: keep ?? [], dry_run: dry_run !== false }
         })
+      )
+  );
+
+  server.registerTool(
+    "link_balance_item_to_ato",
+    {
+      title: "Link a typed balance item to an ATO account",
+      annotations: WRITES,
+      description:
+        "Tie one typed balance item to the ATO account + bucket it stands for, so use_ato_position supersedes it " +
+        "by that link instead of by its label (use when the label doesn't say, or two lines look alike). " +
+        "ato_bucket: \"owed\" (the account's balance — the ICA, or earlier years' income tax), or for the " +
+        "activity statement \"accrued_gst\", \"accrued_payg_instalment\" or another accrued_<component>. Pass " +
+        "ato_account_id: null to unlink. It doesn't change the amount or stop the line counting — run " +
+        "use_ato_position for that. Rejected if the year is closed or lodged.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        balance_item_id: balanceItemId,
+        ato_account_id: z.number().int().nullable().describe("The ATO account (list_ato_accounts), or null to unlink"),
+        ato_bucket: z.string().optional().describe('Bucket: "owed" (default), "accrued_gst", "accrued_payg_instalment" …')
+      }
+    },
+    async ({ fund_id, financial_year, balance_item_id, ato_account_id, ato_bucket }) =>
+      toResult(
+        await api(
+          "PATCH",
+          `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/balance_items/${balance_item_id}/link_ato`,
+          { body: { ato_account_id, ato_bucket } }
+        )
       )
   );
 

@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { Api } from "../api.js";
 import { BASE_URL, toResult } from "../api.js";
-import { RELEASE_NOTES, SERVER_NAME, SERVER_VERSION } from "../version.js";
+import { RELEASE_NOTES, NEW_TOOLS, SERVER_NAME, SERVER_VERSION } from "../version.js";
 import { fundId, isoDate, pageParam, perPageParam, READS } from "../shared.js";
 
 export function register(server: McpServer, api: Api): void {
@@ -30,7 +30,7 @@ export function register(server: McpServer, api: Api): void {
       title: "MCP server info",
       annotations: READS,
       description:
-        "Report this MCP server's name, version, tool count and the API base URL it talks to. Makes no API " +
+        "Report this MCP server's name, version, release notes, the tools new in this release, tool count and the API base URL it talks to. Makes no API " +
         "call, so it works even when the token is missing or wrong. Use it to confirm which release of the " +
         "Beeswax Shares connector a session is running (whoami also returns this under mcp_server).",
       inputSchema: {}
@@ -45,6 +45,7 @@ export function register(server: McpServer, api: Api): void {
       name: SERVER_NAME,
       version: SERVER_VERSION,
       release_notes: RELEASE_NOTES,
+      new_tools: NEW_TOOLS,
       tool_count: registered ? Object.keys(registered).length : undefined,
       api_base_url: BASE_URL
     };

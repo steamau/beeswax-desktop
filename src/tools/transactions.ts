@@ -154,6 +154,9 @@ export function register(server: McpServer, api: Api): void {
         "Edit an existing security-ledger transaction (trade or income) in place — e.g. add a distribution's " +
         "annual tax statement components, set rent's GST treatment, set an entitlement date to accrue income to " +
         "an earlier year, link a receipt to the prior-year receivable it settles, or enter a sell's capital gain. " +
+        "A receipt linked (or re-linked) to a receivable for more than is still outstanding on it is split: the " +
+        "outstanding part settles it and the excess is recorded as income on a new transaction " +
+        "(excess_income_transaction in the result). " +
         "Only the fields you pass change; this overwrites them. Find the row via search_transactions (it gives " +
         "the id and holding_id). Blocked if the transaction's financial year is closed or lodged. AUD.",
       inputSchema: {

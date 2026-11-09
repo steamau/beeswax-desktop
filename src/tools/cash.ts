@@ -195,6 +195,21 @@ export function register(server: McpServer, api: Api): void {
           .number()
           .optional()
           .describe("Exact GST component in AUD, when known (overrides the 1/11th estimate)"),
+        settles_fund_balance_item_id: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional()
+          .describe(
+            "Expense payment that settles a prior-year creditor (a liability from list_balance_items, e.g. last " +
+              "year's sundry creditors): the settled part isn't an expense again. null unlinks. Same as " +
+              "settle_prior_year_creditor"
+          ),
+        settled_balance_item_amount: z
+          .number()
+          .optional()
+          .describe("Part of the payment that settles the creditor (default: what is still owed, capped at the payment)"),
         move_to_bank_account_id: z
           .number()
           .int()
@@ -415,6 +430,78 @@ export function register(server: McpServer, api: Api): void {
           "POST",
           `/funds/${fund_id}/bank_accounts/${bank_account_id}/cash_transactions/${cash_transaction_id}/detach`
         )
+      )
+  );
+
+  server.registerTool(
+    "settle_prior_year_creditor",
+    {
+      title: "Link an expense payment to a prior-year creditor",
+      annotations: WRITES,
+      description:
+        "Say that an expense payment settles a creditor carried on an earlier year's balance sheet (a liability " +
+        "balance item, e.g. FY24 \"Sundry creditors\" for accounting and audit fees paid in FY25). That part was " +
+        "the earlier year's expense, so the operating statement and the return's deductions leave it out — no H1/J1 " +
+        "override needed. amount defaults to what is still owed on the creditor, capped at the payment; several " +
+        "payments can settle one creditor. fund_balance_item_id null unlinks. The result gives the row's " +
+        "expense_amount before → after and what is still owed. Blocked if the payment's year is closed or lodged.",
+      inputSchema: {
+        fund_id: fundId,
+        bank_account_id: bankAccountId,
+        cash_transaction_id: z.number().int().positive().describe("The expense payment (from list_cash_transactions)"),
+        fund_balance_item_id: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .describe("The prior-year liability it settles (list_balance_items), or null to unlink"),
+        amount: z.number().positive().optional().describe("Part of the payment that settles it (default: what is still owed)")
+      }
+    },
+    async ({ fund_id, bank_account_id, cash_transaction_id, fund_balance_item_id, amount }) =>
+      toResult(
+        await api(
+          "POST",
+          `/funds/${fund_id}/bank_accounts/${bank_account_id}/cash_transactions/${cash_transaction_id}/settle_creditor`,
+          { body: { fund_balance_item_id, amount } }
+        )
+      )
+  );
+
+  server.registerTool(
+    "set_expense_gst_treatment",
+    {
+      title: "Expenses' GST vs BAS credits, and a bulk GST fix",
+      annotations: WRITES,
+      description:
+        "Compare a year's expense GST with the GST credits claimed on the activity statements (per period: GST on " +
+        "rent − net GST raised on the imported 001 account), and set the GST treatment on the year's expense rows " +
+        "in one go. dry_run (default true) changes nothing: it lists each row it would change (gst_treatment, GST and " +
+        "expense_amount before → after), the ledger GST after the change against credits_claimed, and the expense " +
+        "change. Without cash_transaction_ids it takes every gst_free expense row with no gst_amount in a category " +
+        "that carries GST (not bank fees, ASIC fees, interest or insurance) — or the categories given. Show the " +
+        "preview to the user and apply (dry_run: false) only when they say so. The expenses_gst_treatment check " +
+        "reports the same comparison.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        gst_treatment: z
+          .enum(["gst_inclusive", "gst_free", "gst_exclusive", "input_taxed"])
+          .optional()
+          .describe("Treatment to set (default gst_inclusive)"),
+        cash_transaction_ids: z.array(z.number().int().positive()).optional().describe("Only these expense rows"),
+        categories: z
+          .array(z.string())
+          .optional()
+          .describe('Only gst_free rows in these expense categories, e.g. ["expense_accounting", "expense_audit"]'),
+        dry_run: z.boolean().optional().describe("Default true: preview only")
+      }
+    },
+    async ({ fund_id, financial_year, ...body }) =>
+      toResult(
+        await api("POST", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/expense_gst`, {
+          body: { ...body, dry_run: body.dry_run ?? true }
+        })
       )
   );
 }

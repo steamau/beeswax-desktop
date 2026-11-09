@@ -236,4 +236,34 @@ export function register(server: McpServer, api: Api): void {
         })
       )
   );
+
+  server.registerTool(
+    "reclassify_balance_item_to_holding",
+    {
+      title: "Carry a prior-year balance item into a holding",
+      annotations: WRITES,
+      description:
+        "Say that a prior-year asset balance item became part of a holding from 1 July of the next year — e.g. an " +
+        "air conditioner carried as plant beside a property, which the next 30 June valuation of the property " +
+        "includes. No cash moves and net assets don't change: the next year's movement schedule shows the amount " +
+        "as a transfer in to the holding (not a purchase or an unrealised gain), so the operating statement reports " +
+        "no gain for it. financial_year is the item's own year (it may be lodged — it isn't changed); the next year " +
+        "must be open. dry_run (default true) returns the holding's movement before → after and the change to the " +
+        "operating result; apply with dry_run: false once the user agrees. remove: true undoes it.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey.describe("The balance item's financial year, e.g. \"2023-24\""),
+        balance_item_id: balanceItemId,
+        holding_id: z.number().int().positive().optional().describe("Holding it became part of (required unless remove)"),
+        note: z.string().max(2000).optional().describe("Why — shown with the transfer"),
+        dry_run: z.boolean().optional().describe("Default true: preview only"),
+        remove: z.boolean().optional().describe("Undo an earlier reclassification")
+      }
+    },
+    async ({ fund_id, financial_year, balance_item_id, holding_id, note, dry_run, remove }) => {
+      const path = `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/balance_items/${balance_item_id}/reclassify`;
+      if (remove) return toResult(await api("DELETE", path));
+      return toResult(await api("POST", path, { body: { holding_id, note, dry_run: dry_run ?? true } }));
+    }
+  );
 }

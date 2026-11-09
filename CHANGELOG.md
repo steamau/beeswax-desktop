@@ -1,5 +1,23 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.13.0 — 2026-11-09
+- **resolve_return_check**: accept a check in state `attention` (note required), answer a `needs_decision` check
+  with one of its `decision_options` values, or `clear` an earlier answer — the same service as the web buttons.
+  `confirmed_by_user` must be true: quote the check, value and note to the trustee and get a yes first. Recorded as
+  "<user> via assistant" on the check (web and year-end accounts) and in the audit log. Refused for blocking checks,
+  finalised returns and closed or lodged years.
+- **reclassify_balance_item_to_holding** (`dry_run` defaults to true; `remove` undoes): a prior-year asset balance item
+  that became part of a holding from 1 July shows as a transfer in on the movement schedule, not a purchase or an
+  unrealised gain. The item's own (lodged) year isn't changed.
+- **settle_prior_year_creditor** (also `settles_fund_balance_item_id` on update_cash_transaction): the settled part
+  of an expense payment isn't an expense again — on the operating statement or the return's deductions.
+- **set_expense_gst_treatment** (`dry_run` defaults to true): expense GST against BAS credits claimed per period, and a
+  bulk gst_treatment fix over a year's expense rows. New check `expenses_gst_treatment` (Books). A GST-registered
+  fund's expense rows now default to gst_inclusive when categorised (not bank fees, ASIC fees, interest, insurance).
+- **update_transaction / record_income**: a receipt linked to a receivable for more than is outstanding is split;
+  the excess is income (`excess_income_transaction` in the result).
+- The operating statement expenses the general interest charge on the ATO accounts for the year (net of remissions).
+
 ## 1.12.0 — 2026-11-09
 - **use_ato_position** replaces apply_ato_balance_items (`dry_run` defaults to true): the year's ATO
   balance-sheet lines from the 30 June position — buckets `owed` (ICA; earlier income years' income tax) and

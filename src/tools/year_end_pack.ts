@@ -188,6 +188,7 @@ export function register(server: McpServer, api: Api): void {
         "statements, trustees' declaration, investment summary, tax reconciliation, one member statement per member, " +
         "trustee minutes, trustee representation letter and the return — with headline totals (benefits accrued, " +
         "income tax expense, net assets, taxable income, whether the tax reconciliation ties to the return) and " +
+        "evidence_index (the year's supporting documents, permanent ones included, each with a file_path) and " +
         "net_assets_reconciliation: members' opening balances + benefits accrued + rollovers in − benefits paid " +
         "against net assets at 30 June, with the difference (null without member statements). All figures come " +
         "from the same services as the return. Amounts in AUD.",

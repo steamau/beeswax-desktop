@@ -42,7 +42,49 @@ const bankLine = z.object({
 export function register(server: McpServer, api: Api): void {
   const CONTENT_TYPES: Record<string, string> = {
     ".pdf": "application/pdf",
-    ".csv": "text/csv"
+    ".csv": "text/csv",
+    // Supporting documents may be scans, photos or office files.
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".heic": "image/heic",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".txt": "text/plain",
+    ".eml": "message/rfc822"
+  };
+
+  // Fields shared by upload_document and update_document: what a supporting
+  // document is and what it is evidence for.
+  const supportingFields = {
+    category: z
+      .enum(["statement", "supporting"])
+      .optional()
+      .describe(
+        '"statement" (extracted into lines and reconciled) or "supporting" (stored as evidence only — never ' +
+          "extracted, no lines, never pending work). Default inferred from kind: supporting-only kinds " +
+          '(trust_deed, lease, valuation, correspondence, ato_notice, audit, legal, insurance, minutes, ' +
+          'trustee_consent, actuarial_certificate, related_party_agreement) are supporting; "other" stays a statement unless you say so.'
+      ),
+    document_date: isoDate("Date on the document itself (letter, report, deed date)").optional(),
+    financial_years: z
+      .array(z.string())
+      .optional()
+      .describe('Financial years it is evidence for, as labels e.g. ["2024-25","2025-26"]. [] clears.'),
+    permanent: z
+      .boolean()
+      .optional()
+      .describe("Not tied to a year: shows in every year's evidence index (trust deed, lease). Defaults true for trust_deed, lease, related_party_agreement and trustee_consent with no years."),
+    holding_id: z.number().int().positive().nullable().optional().describe("Holding it relates to, e.g. the property (null clears)"),
+    balance_item_id: z.number().int().positive().nullable().optional().describe("Balance item it supports (list_balance_items; null clears)"),
+    check_key: z.string().nullable().optional().describe('Return check it is evidence for, e.g. "large_transactions" (get_return_checks; null clears)'),
+    compliance_document_type: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Compliance document it supports, e.g. "notes_to_financial_statements", "investment_strategy" (null clears)'),
+    counterparty: z.string().nullable().optional().describe('Other party, e.g. "Slightly Orangey Colour Pty Ltd" (null clears)'),
+    note: z.string().nullable().optional().describe("Free-text note: what it is and why it matters (null clears)")
   };
 
   server.registerTool(
@@ -51,20 +93,25 @@ export function register(server: McpServer, api: Api): void {
       title: "Upload document",
       annotations: WRITES,
       description:
-        "Upload a local PDF or CSV (broker statement, contract note, dividend statement, annual tax statement) " +
-        "into the fund's document store. Reads the file from disk, base64-encodes it and posts it. A CSV is " +
-        "imported and reconciled automatically (poll get_document). A PDF of this kind is NOT read by the server: " +
-        "after uploading, read the PDF yourself and post its lines with submit_document_lines (the response's " +
-        "next_step says so). Bank statements are uploaded from the bank account in the web app, where a PDF is " +
-        "read automatically; if one is still 'uploaded' (or 'failed'), read it with download_document.",
+        "Upload a local file into the fund's document store. Two categories. A STATEMENT (broker statement, " +
+        "contract note, dividend statement, annual tax statement — PDF or CSV) is extracted and reconciled: a CSV " +
+        "is imported automatically (poll get_document); a PDF is NOT read by the server, so read it yourself and " +
+        "post its lines with submit_document_lines (the response's next_step says so). A SUPPORTING document " +
+        "(trust deed, lease, valuation, liquidator/ATO/auditor correspondence, minutes, insurance policy…) is " +
+        "stored as evidence only — no extraction, no lines, nothing to submit — and can be linked to financial " +
+        "years, a holding, a balance item, a return check and a compliance document so it shows on those pages " +
+        "and in the auditor's evidence index. Bank statements are uploaded from the bank account in the web app.",
       inputSchema: {
         fund_id: fundId,
-        file_path: z.string().describe("Absolute path to the local PDF or CSV file"),
+        file_path: z.string().describe("Absolute path to the local file (PDF or CSV for statements; PDF, image, docx etc. for supporting documents)"),
         kind: z
           .string()
           .optional()
           .describe(
-            'Document kind, e.g. "broker_statement", "contract_note", "dividend_statement" (default "broker_statement")'
+            'Document kind. Statements: "broker_statement" (default), "contract_note", "dividend_statement", ' +
+              '"registry_statement", "annual_tax_statement", "other". Supporting: "trust_deed", "lease", "valuation", ' +
+              '"correspondence", "ato_notice", "audit", "legal", "insurance", "minutes", "trustee_consent", ' +
+              '"actuarial_certificate", "related_party_agreement", "other" (default for category "supporting")'
           ),
         title: z.string().optional().describe("Human-friendly title (defaults from the file)"),
         content_type: z
@@ -72,10 +119,11 @@ export function register(server: McpServer, api: Api): void {
           .optional()
           .describe("MIME type override; inferred from extension (.pdf/.csv) if omitted"),
         period_start: isoDate("Statement period start").optional(),
-        period_end: isoDate("Statement period end").optional()
+        period_end: isoDate("Statement period end").optional(),
+        ...supportingFields
       }
     },
-    async ({ fund_id, file_path, kind, title, content_type, period_start, period_end }) => {
+    async ({ fund_id, file_path, kind, title, content_type, period_start, period_end, ...supporting }) => {
       let data: Buffer;
       try {
         data = await readFile(file_path);
@@ -88,7 +136,7 @@ export function register(server: McpServer, api: Api): void {
       const resolvedType = content_type ?? inferred;
       if (!resolvedType) {
         throw new Error(
-          `Cannot infer content type for "${extname(file_path)}" — pass content_type explicitly (PDF and CSV are supported).`
+          `Cannot infer content type for "${extname(file_path)}" — pass content_type explicitly.`
         );
       }
       return toResult(
@@ -101,12 +149,46 @@ export function register(server: McpServer, api: Api): void {
               filename: basename(file_path),
               content_type: resolvedType,
               period_start,
-              period_end
+              period_end,
+              ...supporting
             }
           }
         }),
         { untrusted: true }
       );
+    }
+  );
+
+  server.registerTool(
+    "update_document",
+    {
+      title: "Update document",
+      annotations: WRITES,
+      description:
+        "Retitle, recategorise or relink a document — e.g. turn a liquidator's report that was uploaded as a " +
+        'statement into a supporting "correspondence" document linked to its financial years, the property ' +
+        "holding and the notes_to_financial_statements compliance document. Only the fields you pass change; " +
+        "pass null (or [] for financial_years) to clear a link. A statement that already has extracted lines " +
+        "can't become supporting. Changes the document only — never the ledger. Audit-logged.",
+      inputSchema: {
+        fund_id: fundId,
+        document_id: z.number().int().positive().describe("Document ID (from list_documents)"),
+        kind: z.string().optional().describe("New kind (must fit the category; see upload_document)"),
+        title: z.string().optional().describe("New title"),
+        period_start: isoDate("Statement period start").optional(),
+        period_end: isoDate("Statement period end").optional(),
+        ...supportingFields
+      }
+    },
+    async ({ fund_id, document_id, ...fields }) => {
+      const document = Object.fromEntries(
+        Object.entries(fields)
+          .filter(([, v]) => v !== undefined)
+          .map(([k, v]) => [k, v === null ? "" : v])
+      );
+      return toResult(await api("PATCH", `/funds/${fund_id}/documents/${document_id}`, { body: { document } }), {
+        untrusted: true
+      });
     }
   );
 
@@ -138,22 +220,31 @@ export function register(server: McpServer, api: Api): void {
       title: "List documents",
       annotations: READS,
       description:
-        "List the fund's uploaded documents (statements, contract notes etc.), newest first, with extraction " +
-        "status and reconciliation summaries. Use to check whether a statement was already uploaded before " +
-        "uploading it again, or to find a document ID.",
+        "List the fund's documents — statements (with extraction status and reconciliation summaries) and " +
+        "supporting documents (evidence: deeds, leases, correspondence, with their links) — newest first. Use to " +
+        "check whether something was already uploaded, or to find a document ID.",
       inputSchema: {
         fund_id: fundId,
+        category: z.enum(["statement", "supporting"]).optional().describe("Only statements or only supporting documents"),
+        kind: z.string().optional().describe('Filter by kind, e.g. "lease", "correspondence", "broker_statement"'),
+        holding_id: z.number().int().positive().optional().describe("Only documents linked to this holding"),
+        financial_year: z
+          .string()
+          .optional()
+          .describe('Financial year label e.g. "2025-26": supporting documents linked to it (plus permanent ones and unlinked ones dated in it) and statements whose period touches it'),
+        check_key: z.string().optional().describe("Only documents linked to this return check"),
+        compliance_document_type: z.string().optional().describe("Only documents linked to this compliance document type"),
         status: z
           .string()
           .optional()
-          .describe('Filter by document status, e.g. "pending", "processing", "extracted", "reconciled", "failed"'),
+          .describe('Filter by document status: "uploaded", "processing", "extracted", "reconciled", "failed" (statements) or "stored" (supporting)'),
         page: pageParam,
         per_page: perPageParam
       }
     },
-    async ({ fund_id, status, page, per_page }) =>
+    async ({ fund_id, page, per_page, ...filters }) =>
       toResult(
-        await api("GET", `/funds/${fund_id}/documents`, { query: { status, page, per_page } }),
+        await api("GET", `/funds/${fund_id}/documents`, { query: { ...filters, page, per_page } }),
         { untrusted: true }
       )
   );

@@ -1,5 +1,16 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.14.0 — 2026-11-09
+- **Supporting documents.** `upload_document` takes `category` ("statement" | "supporting"; inferred from `kind`),
+  `document_date`, `financial_years`, `permanent`, `holding_id`, `balance_item_id`, `check_key`,
+  `compliance_document_type`, `counterparty` and `note`, and accepts images, docx/xlsx, txt and eml. A supporting
+  document is stored as evidence only (status `stored`): no extraction, no `next_step`, and extract / lines /
+  reconcile refuse it.
+- **update_document** (new): retitle, recategorise or relink a document. A statement with extracted lines can't
+  become supporting. Never changes the ledger.
+- **list_documents**: filters `category`, `kind`, `holding_id`, `financial_year`, `check_key`,
+  `compliance_document_type`.
+
 ## 1.13.0 — 2026-11-09
 - **resolve_return_check**: accept a check in state `attention` (note required), answer a `needs_decision` check
   with one of its `decision_options` values, or `clear` an earlier answer — the same service as the web buttons.

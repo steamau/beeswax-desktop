@@ -185,16 +185,23 @@ export function register(server: McpServer, api: Api): void {
           .describe('For tax rows: "payg", "income_tax", "refund", "franking_refund", "division_296"'),
         tax_deductible: z.boolean().optional(),
         gst_treatment: z
-          .enum(["gst_free", "gst_inclusive", "gst_exclusive", "input_taxed"])
+          .enum(["gst_free", "gst_inclusive", "input_taxed"])
           .optional()
           .describe(
             "GST treatment of the line. gst_inclusive: GST is inside the amount (1/11th is stripped for the return); " +
-              "gst_exclusive / gst_free / input_taxed: the amount is reported as is"
+              "gst_free / input_taxed: no GST in the amount, reported as is. A bank line is cash paid, so it is never GST-exclusive. " +
+              "Rejected on a row matched/attributed to a security or income transaction (e.g. rent): its GST comes from that " +
+              "transaction (resolved_gst) — set it with update_transaction instead"
           ),
         gst_amount: z
           .number()
           .optional()
-          .describe("Exact GST component in AUD, when known (overrides the 1/11th estimate)"),
+          .describe(
+            "Exact GST component in AUD, when known (overrides the 1/11th estimate). A magnitude: give it positive " +
+              "(a negative value is treated the same); it is stored with the row's sign, so on a -698.50 payment " +
+              "63.50 gives expense_amount 635.00. Can't exceed the amount; above 1/11th of it the response carries a warning. " +
+              "Rejected on a matched row, like gst_treatment"
+          ),
         settles_fund_balance_item_id: z
           .number()
           .int()
@@ -341,7 +348,7 @@ export function register(server: McpServer, api: Api): void {
         cgt_concession_amount: z.number().optional().describe("CGT concession amount"),
         tax_deferred_amount: z.number().optional().describe("Tax-deferred (AMIT cost-base decrease) amount"),
         amit_cost_base_increase: z.number().optional().describe("AMIT cost-base increase"),
-        gst_treatment: z.enum(["gst_free", "gst_inclusive", "gst_exclusive", "input_taxed"]).optional(),
+        gst_treatment: z.enum(["gst_free", "gst_inclusive", "input_taxed"]).optional(),
         gst_amount: z.number().optional(),
         notes: z.string().optional()
       }
@@ -474,19 +481,21 @@ export function register(server: McpServer, api: Api): void {
       title: "Expenses' GST vs BAS credits, and a bulk GST fix",
       annotations: WRITES,
       description:
-        "Compare a year's expense GST with the GST credits claimed on the activity statements (per period: GST on " +
-        "rent − net GST raised on the imported 001 account), and set the GST treatment on the year's expense rows " +
+        "Compare a year's GST with the activity statements — per period, GST collected on rent − GST paid in the " +
+        "expense rows (magnitudes) against the net GST raised on the imported 001 account — and set the GST treatment " +
+        "on the year's expense rows " +
         "in one go. dry_run (default true) changes nothing: it lists each row it would change (gst_treatment, GST and " +
         "expense_amount before → after), the ledger GST after the change against credits_claimed, and the expense " +
         "change. Without cash_transaction_ids it takes every gst_free expense row with no gst_amount in a category " +
-        "that carries GST (not bank fees, ASIC fees, interest or insurance) — or the categories given. Show the " +
+        "that carries GST (not bank fees, ASIC fees, interest or insurance) — or the categories given; rows matched to " +
+        "a security/income transaction are never changed (their GST is on that transaction). Show the " +
         "preview to the user and apply (dry_run: false) only when they say so. The expenses_gst_treatment check " +
         "reports the same comparison.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
         gst_treatment: z
-          .enum(["gst_inclusive", "gst_free", "gst_exclusive", "input_taxed"])
+          .enum(["gst_inclusive", "gst_free", "input_taxed"])
           .optional()
           .describe("Treatment to set (default gst_inclusive)"),
         cash_transaction_ids: z.array(z.number().int().positive()).optional().describe("Only these expense rows"),

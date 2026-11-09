@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "beeswax-shares",
   "display_name": "Beeswax Shares",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Manage your Australian SMSF investment ledger from Claude — read portfolio data, record trades and income, upload statements, reconcile cash, and run financial-year close/lodge in Beeswax Shares.",
   "long_description": "A Model Context Protocol server for **Beeswax Shares**, the SMSF (Australian self-managed super fund) portfolio app. It is a thin client over the app's JSON API, letting Claude operate the ledger end to end: read your portfolio, record trades and income, upload broker/dividend statements, reconcile bank cash, and run the financial-year lifecycle (reconcile → close → lodge).\n\n**Direct writes:** `record_trade` and `record_income` write straight to the ledger (no review step). Every write is audit-logged server-side with the token as actor, and access is scoped by the token's permissions.\n\n**Untrusted-content protection:** tool results that embed text extracted from uploaded documents or bank feeds are stripped of invisible Unicode and wrapped in an explicit untrusted-data fence, so statement text is treated as data — never as instructions to the model.\n\nEach person connects with their **own** API token, which scopes access to their own funds. Create a token at **Account → API Access** in the app (shown once).",
   "author": {
@@ -40,6 +40,7 @@
     { "name": "record_income", "description": "Record dividend/distribution/interest/rental income directly to the ledger." },
     { "name": "update_transaction", "description": "Edit an existing security-ledger transaction (trade or income) in place." },
     { "name": "upload_document", "description": "Upload a PDF/CSV statement; CSVs import and reconcile automatically, PDFs wait for submit_document_lines." },
+    { "name": "update_document", "description": "Retitle, recategorise or relink a document." },
     { "name": "get_document", "description": "A document with its extracted statement lines and match statuses." },
     { "name": "list_documents", "description": "List uploaded documents with extraction status." },
     { "name": "reconcile_document", "description": "Re-run statement-vs-ledger matching and return a summary." },

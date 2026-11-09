@@ -1,5 +1,17 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.15.0 — 2026-11-10
+- **Compliance documents agree with the year-end pack and the return.** `operating_statement` and
+  `statement_of_financial_position` are now built by the pack's builder (the same blocks as
+  `get_year_end_pack_document`): their `content` carries `documents` (blocks), no longer a `statement` hash.
+- **generate_compliance_document**: `warnings` now carries consistency failures (net assets ≠ members' funds, total
+  assets ≠ item 15 U, benefits accrued not agreeing across the statements). `finalize: true` on a financial document is
+  refused (422 + `blockers`) while the year has blocking checks or the document fails those checks; a draft generates
+  at any time. The result adds `out_of_date` / `out_of_date_reason`: a finalised document whose figures have since
+  moved reads "Out of date" on its `compliance_document:<type>` check, and generating it again regenerates it.
+- **update_smsf_return_field**: returns the changed `field`, `affected_fields` (every other figure it moved) and the
+  return's status and completion — not the whole return. `compact: false` returns the whole return as before.
+
 ## 1.14.0 — 2026-11-09
 - **Supporting documents.** `upload_document` takes `category` ("statement" | "supporting"; inferred from `kind`),
   `document_date`, `financial_years`, `permanent`, `holding_id`, `balance_item_id`, `check_key`,

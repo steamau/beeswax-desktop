@@ -47,10 +47,14 @@ export function register(server: McpServer, api: Api): void {
         "Compliance step does (e.g. operating_statement, statement_of_financial_position, trustee_minutes, " +
         "trustees_declaration; the part after \"compliance_document:\" in a check key). Figures come from the " +
         "ledger; answers fill the document's own fields (the result lists them, with any still missing). Running it " +
-        "again updates the draft. finalize: true freezes it and its check reads Done (refused while required " +
-        "fields are blank); not_applicable: true marks it N/A instead. Uploaded types (bank statements, signed " +
-        "files) are refused — use upload_document + mark_compliance_document_prepared. Refused for a locked year " +
-        "or a document already finalised (reopen it on the web).",
+        "again updates the draft; a draft can be generated at any time. The result's warnings list any " +
+        "consistency failures (e.g. net assets not equal to members' funds). finalize: true freezes it and its " +
+        "check reads Done — refused, with blockers, while required fields are blank or, for a financial " +
+        "document, while the year has blocking checks or the document fails its consistency checks. " +
+        "not_applicable: true marks it N/A instead. Uploaded types (bank statements, signed files) are refused — " +
+        "use upload_document + mark_compliance_document_prepared. Refused for a locked year or a document already " +
+        "finalised (reopen it on the web) — unless the result showed out_of_date: true (its figures have moved " +
+        "since it was finalised), in which case running it again regenerates it.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKeyEarly,

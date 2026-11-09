@@ -14,13 +14,12 @@ export const SERVER_VERSION: string = pkg.version;
 
 // What changed in this release; server_info reports it. Keep in step with CHANGELOG.md.
 export const RELEASE_NOTES =
-  "1.14.0: supporting documents — upload_document takes category (statement | supporting), document_date, " +
-  "financial_years, permanent and links (holding, balance item, check, compliance document type, counterparty, " +
-  "note), and accepts images, docx/xlsx, txt and eml; a supporting document is stored as evidence only. " +
-  "update_document retitles, recategorises or relinks a document (never the ledger). list_documents filters by " +
-  "category, kind, holding, financial year, check and compliance document type.";
+  "1.15.0: compliance documents agree with the year-end pack and the return — operating_statement and " +
+  "statement_of_financial_position are built by the pack's builder (content carries documents blocks, not a " +
+  "statement hash). generate_compliance_document reports consistency failures in warnings, refuses finalize " +
+  "(422 + blockers) while the year has blocking checks or the document fails them, and adds out_of_date / " +
+  "out_of_date_reason (generating again regenerates). update_smsf_return_field returns the changed field, " +
+  "affected_fields and completion; compact: false returns the whole return.";
 
 // Tools added in this release; server_info lists them.
-export const NEW_TOOLS = [
-  "update_document"
-];
+export const NEW_TOOLS: string[] = [];

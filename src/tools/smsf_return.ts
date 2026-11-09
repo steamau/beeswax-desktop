@@ -49,19 +49,25 @@ export function register(server: McpServer, api: Api): void {
       description:
         "Override a single field on the return (e.g. an income or deduction amount). Goes through the same safe " +
         "write path as the web app: calculated/readonly fields are rejected, totals recompute automatically, and a " +
-        "blank value reverts the field to its ledger-derived figure. Returns the recomputed return.",
+        "blank value reverts the field to its ledger-derived figure. Returns the changed field (value and " +
+        "previous_value), affected_fields (every other figure the change moved, e.g. totals) and the return's " +
+        "status and completion_percentage. Pass compact: false for the entire recomputed return (very large).",
       inputSchema: {
         fund_id: fundId,
         smsf_return_id: z.number().int().positive().describe("SMSF return ID"),
         section_key: z.string().describe('Section key, e.g. "income", "deductions", "tax_calc"'),
         field_key: z.string().describe('Field key within the section, e.g. "gross_rent", "auditor_fee"'),
-        value: z.string().describe("New value (blank to revert to the auto/ledger value)")
+        value: z.string().describe("New value (blank to revert to the auto/ledger value)"),
+        compact: z
+          .boolean()
+          .optional()
+          .describe("Default true: return only the changed field, the figures it moved and completion. false returns the whole return.")
       }
     },
-    async ({ fund_id, smsf_return_id, section_key, field_key, value }) =>
+    async ({ fund_id, smsf_return_id, section_key, field_key, value, compact }) =>
       toResult(
         await api("PATCH", `/funds/${fund_id}/smsf_returns/${smsf_return_id}/update_field`, {
-          body: { section_key, field_key, value }
+          body: { section_key, field_key, value, compact: compact ?? true }
         })
       )
   );

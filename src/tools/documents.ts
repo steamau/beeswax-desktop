@@ -61,10 +61,8 @@ export function register(server: McpServer, api: Api): void {
       .enum(["statement", "supporting"])
       .optional()
       .describe(
-        '"statement" (extracted into lines and reconciled) or "supporting" (stored as evidence only — never ' +
-          "extracted, no lines, never pending work). Default inferred from kind: supporting-only kinds " +
-          '(trust_deed, lease, valuation, correspondence, ato_notice, audit, legal, insurance, minutes, ' +
-          'trustee_consent, actuarial_certificate, related_party_agreement) are supporting; "other" stays a statement unless you say so.'
+        "Optional — the kind decides it. Statement kinds are extracted and reconciled; every other kind is " +
+          'stored as evidence. Only useful with no kind (picks "other_statement" or "other").'
       ),
     document_date: isoDate("Date on the document itself (letter, report, deed date)").optional(),
     financial_years: z
@@ -93,10 +91,10 @@ export function register(server: McpServer, api: Api): void {
       title: "Upload document",
       annotations: WRITES,
       description:
-        "Upload a local file into the fund's document store. Two categories. A STATEMENT (broker statement, " +
+        "Upload a local file into the fund's documents. The kind decides what happens to it. A STATEMENT kind (broker statement, " +
         "contract note, dividend statement, annual tax statement — PDF or CSV) is extracted and reconciled: a CSV " +
         "is imported automatically (poll get_document); a PDF is NOT read by the server, so read it yourself and " +
-        "post its lines with submit_document_lines (the response's next_step says so). A SUPPORTING document " +
+        "post its lines with submit_document_lines (the response's next_step says so). Any other kind " +
         "(trust deed, lease, valuation, liquidator/ATO/auditor correspondence, minutes, insurance policy…) is " +
         "stored as evidence only — no extraction, no lines, nothing to submit — and can be linked to financial " +
         "years, a holding, a balance item, a return check and a compliance document so it shows on those pages " +
@@ -108,10 +106,10 @@ export function register(server: McpServer, api: Api): void {
           .string()
           .optional()
           .describe(
-            'Document kind. Statements: "broker_statement" (default), "contract_note", "dividend_statement", ' +
-              '"registry_statement", "annual_tax_statement", "other". Supporting: "trust_deed", "lease", "valuation", ' +
-              '"correspondence", "ato_notice", "audit", "legal", "insurance", "minutes", "trustee_consent", ' +
-              '"actuarial_certificate", "related_party_agreement", "other" (default for category "supporting")'
+            'Document kind. Statement kinds (extracted and reconciled): "broker_statement" (default), "contract_note", ' +
+              '"dividend_statement", "registry_statement", "annual_tax_statement", "other_statement". Evidence kinds ' +
+              '(stored only): "trust_deed", "lease", "valuation", "correspondence", "ato_notice", "audit", "legal", ' +
+              '"insurance", "minutes", "trustee_consent", "actuarial_certificate", "related_party_agreement", "other"'
           ),
         title: z.string().optional().describe("Human-friendly title (defaults from the file)"),
         content_type: z
@@ -165,15 +163,15 @@ export function register(server: McpServer, api: Api): void {
       title: "Update document",
       annotations: WRITES,
       description:
-        "Retitle, recategorise or relink a document — e.g. turn a liquidator's report that was uploaded as a " +
-        'statement into a supporting "correspondence" document linked to its financial years, the property ' +
+        "Retitle, change the kind of, or relink a document — e.g. turn a liquidator's report that was uploaded as a " +
+        'statement into a "correspondence" document linked to its financial years, the property ' +
         "holding and the notes_to_financial_statements compliance document. Only the fields you pass change; " +
         "pass null (or [] for financial_years) to clear a link. A statement that already has extracted lines " +
-        "can't become supporting. Changes the document only — never the ledger. Audit-logged.",
+        "can't change to an evidence kind. Changes the document only — never the ledger. Audit-logged.",
       inputSchema: {
         fund_id: fundId,
         document_id: z.number().int().positive().describe("Document ID (from list_documents)"),
-        kind: z.string().optional().describe("New kind (must fit the category; see upload_document)"),
+        kind: z.string().optional().describe("New kind (see upload_document); moving between a statement kind and an evidence kind changes what happens to it"),
         title: z.string().optional().describe("New title"),
         period_start: isoDate("Statement period start").optional(),
         period_end: isoDate("Statement period end").optional(),
@@ -225,7 +223,7 @@ export function register(server: McpServer, api: Api): void {
         "check whether something was already uploaded, or to find a document ID.",
       inputSchema: {
         fund_id: fundId,
-        category: z.enum(["statement", "supporting"]).optional().describe("Only statements or only supporting documents"),
+        category: z.enum(["statement", "supporting"]).optional().describe("Only statement kinds or only evidence kinds"),
         kind: z.string().optional().describe('Filter by kind, e.g. "lease", "correspondence", "broker_statement"'),
         holding_id: z.number().int().positive().optional().describe("Only documents linked to this holding"),
         financial_year: z

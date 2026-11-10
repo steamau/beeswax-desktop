@@ -1,5 +1,27 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.16.0 — 2026-11-10
+- **The Compliance step asks only for what the law requires.** Each year: `financial_statements` (SIS Act s 35B —
+  the statement of financial position and the operating statement as one item with one signing block, the trustees'
+  declaration wording; figures from the return's own builder), `trustee_minutes` (s 103) and `investment_strategy`
+  (reg 4.09, a standing record: flagged only with none on file or no review for the year; finalised minutes with the
+  review resolution are the review). Permanent records (trust deed, ATO trustee declarations, consents to act) are
+  kept once for the fund.
+- **financial_statements** has no finalise: it freezes when the return is finalised (`finalise_smsf_return`) and
+  unfreezes when the return is unfinalised. Trustees' signatures are recorded on the web; the signing rule follows the
+  trustee structure (3+ directors: at least half; 1 or 2: all).
+- **generate_compliance_document / mark_compliance_document_prepared**: retired types — `operating_statement`,
+  `statement_of_financial_position`, `trustees_declaration`, `detailed_operating_statement`, `investment_summary`,
+  `tax_reconciliation`, `member_statements` — return 410 with `retired: true`, a message saying where the information
+  now lives and `now_lives_in` (pages with URLs). Auditor-requested types (`trustee_representation_letter`,
+  `notes_to_financial_statements`, `related_party_confirmation`, `trustee_residency_declaration`, `property_valuation`)
+  work as before. A year kept on the earlier list keeps every type. The result adds `tier` and `signatures`.
+- **list_year_end_pack / get_year_end_pack_pdf** are slim by default: financial statements, minutes and the return.
+  `include_audit_items: true` adds the notes and the representation letter. Every document key still builds on its own.
+- **update_trustee_minutes**: `strategy_reviewed` (default true).
+- **New: list_auditor_requests, record_auditor_request, answer_auditor_request** — documents the auditor asks for in
+  writing, due 14 days after the request (s 35C(2)), answered with a generated letter or an uploaded file.
+
 ## 1.15.1 — 2026-11-10
 - **No financial advice.** The server instructions now tell the assistant that Beeswax doesn't hold an Australian
   financial services licence and Alpha gives factual information only: report the fund's figures and how they are

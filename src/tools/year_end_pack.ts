@@ -183,19 +183,28 @@ export function register(server: McpServer, api: Api): void {
       title: "List the year-end pack",
       annotations: READS,
       description:
-        "List the documents in a financial year's year-end pack — statement of financial position, operating " +
-        "statement, detailed operating statement (income and market movements by holding), notes to the financial " +
-        "statements, trustees' declaration, investment summary, tax reconciliation, one member statement per member, " +
-        "trustee minutes, trustee representation letter and the return — with headline totals (benefits accrued, " +
-        "income tax expense, net assets, taxable income, whether the tax reconciliation ties to the return) and " +
-        "evidence_index (the year's supporting documents, permanent ones included, each with a file_path) and " +
-        "net_assets_reconciliation: members' opening balances + benefits accrued + rollovers in − benefits paid " +
-        "against net assets at 30 June, with the difference (null without member statements). All figures come " +
-        "from the same services as the return. Amounts in AUD.",
-      inputSchema: { fund_id: fundId, financial_year: financialYearKey }
+        "List the documents in a financial year's year-end pack. By default only what the law requires plus the " +
+        "return: financial_statements (the statement of financial position and the operating statement, with the " +
+        "trustees' declaration as their one signing block), trustee_minutes and smsf_return. include_audit_items: " +
+        "true adds what the auditor asks for in writing (notes_to_financial_statements, " +
+        "trustee_representation_letter). Also headline totals (benefits accrued, income tax expense, net assets, " +
+        "taxable income, whether the tax reconciliation ties to the return), evidence_index (the year's supporting " +
+        "documents, permanent ones included, each with a file_path) and net_assets_reconciliation: members' " +
+        "opening balances + benefits accrued + rollovers in − benefits paid against net assets at 30 June, with " +
+        "the difference (null without member statements). All figures come from the same services as the return. " +
+        "Amounts in AUD.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: financialYearKey,
+        include_audit_items: z.boolean().optional().describe("Also list the auditor-requested items (notes, representation letter)")
+      }
     },
-    async ({ fund_id, financial_year }) =>
-      toResult(await api("GET", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack`))
+    async ({ fund_id, financial_year, include_audit_items }) =>
+      toResult(
+        await api("GET", `/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack`, {
+          query: { include_audit: include_audit_items ? "true" : undefined }
+        })
+      )
   );
 
   server.registerTool(
@@ -206,12 +215,16 @@ export function register(server: McpServer, api: Api): void {
       description:
         "Return one year-end pack document as structured JSON (headings, tables, lines and figures) — the same " +
         "content get_year_end_pack_pdf renders — for checking figures or building your own working papers. " +
-        "Document keys come from list_year_end_pack; member_statement also needs member_id. Amounts in AUD.",
+        "Document keys come from list_year_end_pack; member_statement also needs member_id. Every key still " +
+        "builds, including those no longer listed (detailed_operating_statement, investment_summary, " +
+        "tax_reconciliation, member_statement, the separate statements and trustees_declaration): their figures " +
+        "are the same ones Alpha shows on screen. Amounts in AUD.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
         document: z
           .enum([
+            "financial_statements",
             "statement_of_financial_position",
             "operating_statement",
             "detailed_operating_statement",
@@ -244,14 +257,17 @@ export function register(server: McpServer, api: Api): void {
       title: "Get the year-end pack as a PDF",
       annotations: READS,
       description:
-        "Render the whole year-end pack (cover, contents and every document) — or one document — as a PDF and save " +
-        "it on this computer (BEESWAX_EXPORT_DIR, default ~/Downloads/beeswax-shares). Returns the file path and " +
-        "size. Document keys come from list_year_end_pack; member_statement also needs member_id.",
+        "Render the year-end pack (cover, contents and its documents) — or one document — as a PDF and save it " +
+        "on this computer (BEESWAX_EXPORT_DIR, default ~/Downloads/beeswax-shares). The whole pack is the slim " +
+        "one by default: financial statements, trustee minutes and the return; include_audit_items: true adds " +
+        "the notes and the representation letter. Returns the file path and size. Document keys come from " +
+        "list_year_end_pack; member_statement also needs member_id.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
         document: z
           .enum([
+            "financial_statements",
             "statement_of_financial_position",
             "operating_statement",
             "detailed_operating_statement",
@@ -266,14 +282,16 @@ export function register(server: McpServer, api: Api): void {
           ])
           .optional()
           .describe("One document only; omit for the whole pack"),
-        member_id: z.number().int().positive().optional().describe("Member ID, for document member_statement")
+        member_id: z.number().int().positive().optional().describe("Member ID, for document member_statement"),
+        include_audit_items: z.boolean().optional().describe("Whole pack: add the auditor-requested items")
       }
     },
-    async ({ fund_id, financial_year, document, member_id }) =>
+    async ({ fund_id, financial_year, document, member_id, include_audit_items }) =>
       savePdf(
         await apiBinary(`/funds/${fund_id}/financial_years/${encodeURIComponent(financial_year)}/year_end_pack/pdf`, {
           document,
-          member_id
+          member_id,
+          include_audit: include_audit_items ? "true" : undefined
         }),
         `${document ?? "year-end-pack"}-${financial_year}.pdf`
       )
@@ -329,7 +347,9 @@ export function register(server: McpServer, api: Api): void {
         "contributions (none → \"no contributions were received\"). Standard resolutions: directors_overseas " +
         "(names the absent directors), cmc_australia (central management and control in Australia, by those " +
         "present), no_non_resident_contributions, events_after_year_end (uses the notes' subsequent events), " +
-        "late_lodgments (with late_lodgments_detail). Refused for a locked year or finalised minutes.",
+        "late_lodgments (with late_lodgments_detail). strategy_reviewed (default true) keeps the resolution that " +
+        "the investment strategy was reviewed; once the minutes are finalised that is the year's strategy review " +
+        "on the Compliance step. Refused for a locked year or finalised minutes.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,
@@ -346,11 +366,13 @@ export function register(server: McpServer, api: Api): void {
           .optional()
           .describe("Standard resolutions to include (replaces the current selection)"),
         late_lodgments_detail: z.string().optional().describe("What was lodged late, for the late_lodgments resolution"),
+        strategy_reviewed: z.boolean().optional().describe("The trustees reviewed the investment strategy at this meeting (default true)"),
         custom_resolutions: z.array(z.string()).optional().describe("Extra resolutions, each starting \"That …\" (replaces the current list)")
       }
     },
-    async ({ fund_id, financial_year, present, absent, standard_resolutions, custom_resolutions, ...rest }) => {
+    async ({ fund_id, financial_year, present, absent, standard_resolutions, custom_resolutions, strategy_reviewed, ...rest }) => {
       const answers: Record<string, unknown> = { ...rest };
+      if (strategy_reviewed !== undefined) answers.res_strategy_reviewed = strategy_reviewed ? "yes" : "no";
       if (present || absent) {
         answers.attendance = [
           ...(present ?? []).map((name) => ({ name, present: "yes", absence_reason: "" })),
@@ -371,8 +393,9 @@ export function register(server: McpServer, api: Api): void {
       title: "Set who signs the declaration or representation letter",
       annotations: WRITES,
       description:
-        "Set the signatories (and optionally the signing date) of the trustees' declaration or the trustee " +
-        "representation letter (also the auditor's name for the letter). An empty signatories list returns to " +
+        "Set the signatories (and optionally the signing date) of the trustee representation letter (also the " +
+        "auditor's name), or of a separate trustees' declaration in a year kept on the earlier list — elsewhere the " +
+        "declaration is the financial statements' signing block, where the trustees' signatures are recorded on the web. An empty signatories list returns to " +
         "the default: the directors present at the year-end trustee meeting. Refused for a locked year or a " +
         "finalised document.",
       inputSchema: {

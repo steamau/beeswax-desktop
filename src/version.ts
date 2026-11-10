@@ -14,10 +14,15 @@ export const SERVER_VERSION: string = pkg.version;
 
 // What changed in this release; server_info reports it. Keep in step with CHANGELOG.md.
 export const RELEASE_NOTES =
-  "1.15.1: the server instructions now carry a no-financial-advice rule. Beeswax doesn't hold an Australian " +
-  "financial services licence, so the assistant reports the fund's figures and how they are calculated, and " +
-  "doesn't recommend buying, selling or holding an investment, rank strategies or scenarios, or say whether a " +
-  "balance is enough to retire on. Calculator results are stated with their assumptions. No tools changed.";
+  "1.16.0: the Compliance step asks only for what the law requires each year — financial_statements (statement of " +
+  "financial position + operating statement, one signing block, figures from the return, frozen when the return " +
+  "is finalised and unfrozen when it is unfinalised), trustee_minutes and investment_strategy (a standing record; " +
+  "finalised minutes with strategy_reviewed are the year's review). Retired types (operating_statement, " +
+  "statement_of_financial_position, trustees_declaration, detailed_operating_statement, investment_summary, " +
+  "tax_reconciliation, member_statements) return 410 with where the information lives; auditor-requested types " +
+  "still generate; years kept on the earlier list are unchanged. list_year_end_pack / get_year_end_pack_pdf are " +
+  "slim by default (financial statements, minutes, return); include_audit_items adds notes and the representation " +
+  "letter. New: list_auditor_requests, record_auditor_request, answer_auditor_request (14-day due date, s 35C(2)).";
 
 // Tools added in this release; server_info lists them.
-export const NEW_TOOLS: string[] = [];
+export const NEW_TOOLS: string[] = ["list_auditor_requests", "record_auditor_request", "answer_auditor_request"];

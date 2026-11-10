@@ -1,5 +1,25 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.17.0 — 2026-11-10
+- **The audit, for the auditor's assistant.** `get_audit_program` returns the year's audit program — the same one the
+  Audit step shows — in the order an SMSF audit runs: engagement, the fund, planning, Part A financial, Part B
+  compliance, conclude. Each line has a key, state (`ready`, `attention`, `blocking`, `na`, `info`, or `manual` where
+  Alpha holds no test and the line carries the auditor's procedure), figure, `proven_by`, `evidence_gap` (the source
+  document an auditor expects when none is on file) and the auditor's `signoff`. `get_audit_line` opens one line: facts,
+  working tables, the checks behind it, source documents (read with `download_document`) and its queries.
+- **Testing tools.** `select_audit_sample` draws a reproducible sample (seeded; by value or random) from rows a person
+  or the trustee's assistant entered, since rows read from the bank already carry its record.
+  `list_changes_since_finalised` shows ledger changes after the return was finalised.
+- **An auditor's write lane.** An auditor's token stays read-only on the ledger. With the new `audit:write` scope it can
+  `raise_audit_query` (on a program line with `line_key`), `reply_audit_query`, `close_audit_query`,
+  `request_audit_document` (starts the 14 days, s 35C(2)) and `sign_off_audit_line` — the last only with
+  `confirmed_by_user: true` after the auditor's explicit yes, recorded as signed via their assistant.
+- **Both sides on one thread.** The trustee's assistant reads `list_audit_queries` and answers with
+  `answer_audit_query`. A query's status is now `open` (waiting on the trustee), `resolved` (answered) or `closed`
+  (the auditor accepted the answer); only the auditor closes one.
+- Server instructions gain an AUDITING section: when `whoami` shows role `auditor`, test figures against documents,
+  raise what doesn't agree, change nothing.
+
 ## 1.16.0 — 2026-11-10
 - **The Compliance step asks only for what the law requires.** Each year: `financial_statements` (SIS Act s 35B —
   the statement of financial position and the operating statement as one item with one signing block, the trustees'

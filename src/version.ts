@@ -14,15 +14,19 @@ export const SERVER_VERSION: string = pkg.version;
 
 // What changed in this release; server_info reports it. Keep in step with CHANGELOG.md.
 export const RELEASE_NOTES =
-  "1.16.0: the Compliance step asks only for what the law requires each year — financial_statements (statement of " +
-  "financial position + operating statement, one signing block, figures from the return, frozen when the return " +
-  "is finalised and unfrozen when it is unfinalised), trustee_minutes and investment_strategy (a standing record; " +
-  "finalised minutes with strategy_reviewed are the year's review). Retired types (operating_statement, " +
-  "statement_of_financial_position, trustees_declaration, detailed_operating_statement, investment_summary, " +
-  "tax_reconciliation, member_statements) return 410 with where the information lives; auditor-requested types " +
-  "still generate; years kept on the earlier list are unchanged. list_year_end_pack / get_year_end_pack_pdf are " +
-  "slim by default (financial statements, minutes, return); include_audit_items adds notes and the representation " +
-  "letter. New: list_auditor_requests, record_auditor_request, answer_auditor_request (14-day due date, s 35C(2)).";
+  "1.17.0: the audit, for the auditor's assistant. get_audit_program returns the year's audit program — the same one " +
+  "the Audit step shows — stage by stage (engagement, the fund, planning, Part A financial, Part B compliance, " +
+  "conclude), each line with its figure, what proves it, the source document an auditor expects when none is on file, " +
+  "and the auditor's sign-off; get_audit_line opens one with its working, tests and documents. select_audit_sample " +
+  "draws a reproducible sample weighted to rows not read from the bank; list_changes_since_finalised shows whether " +
+  "the figures moved. An auditor's token (read-only elsewhere) can raise_audit_query, reply_audit_query, " +
+  "close_audit_query, request_audit_document and, on the auditor's explicit yes, sign_off_audit_line (audit:write). " +
+  "The trustee's assistant answers with list_audit_queries / answer_audit_query. Queries are now threads the auditor " +
+  "closes (status open, resolved = answered, closed).";
 
 // Tools added in this release; server_info lists them.
-export const NEW_TOOLS: string[] = ["list_auditor_requests", "record_auditor_request", "answer_auditor_request"];
+export const NEW_TOOLS: string[] = [
+  "get_audit_program", "get_audit_line", "select_audit_sample", "list_changes_since_finalised", "sign_off_audit_line",
+  "list_audit_queries", "raise_audit_query", "answer_audit_query", "reply_audit_query", "close_audit_query",
+  "request_audit_document"
+];

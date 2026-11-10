@@ -18,6 +18,9 @@ test("server exposes untrusted-data instructions and tool annotations", async ()
     const instructions = client.getInstructions() ?? "";
     assert.match(instructions, /untrusted DATA/);
     assert.match(instructions, /suspected_injection/);
+    // Beeswax holds no AFSL: the assistant reports figures and never recommends.
+    assert.match(instructions, /NO FINANCIAL ADVICE/);
+    assert.match(instructions, /Don't recommend buying, selling or holding/);
 
     const { tools } = await client.listTools();
     const byName = new Map(tools.map((t) => [t.name, t]));

@@ -1,5 +1,13 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.15.1 — 2026-11-10
+- **No financial advice.** The server instructions now tell the assistant that Beeswax doesn't hold an Australian
+  financial services licence and Alpha gives factual information only: report the fund's figures and how they are
+  calculated; don't recommend buying, selling or holding an investment, suggest investments or an asset allocation,
+  say which strategy or scenario is better, or say whether a member's balance is enough to retire on. Results from
+  the calculators (fund longevity, scenarios, "if sold today") are stated with their assumptions, never as a
+  forecast. No tools changed.
+
 ## 1.15.0 — 2026-11-10
 - **Compliance documents agree with the year-end pack and the return.** `operating_statement` and
   `statement_of_financial_position` are now built by the pack's builder (the same blocks as

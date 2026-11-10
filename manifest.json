@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "beeswax-shares",
   "display_name": "Beeswax Shares",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Manage your Australian SMSF investment ledger from Claude — read portfolio data, record trades and income, upload statements, reconcile cash, and run financial-year close/lodge in Beeswax Shares.",
   "long_description": "A Model Context Protocol server for **Beeswax Shares**, the SMSF (Australian self-managed super fund) portfolio app. It is a thin client over the app's JSON API, letting Claude operate the ledger end to end: read your portfolio, record trades and income, upload broker/dividend statements, reconcile bank cash, and run the financial-year lifecycle (reconcile → close → lodge).\n\n**Direct writes:** `record_trade` and `record_income` write straight to the ledger (no review step). Every write is audit-logged server-side with the token as actor, and access is scoped by the token's permissions.\n\n**Untrusted-content protection:** tool results that embed text extracted from uploaded documents or bank feeds are stripped of invisible Unicode and wrapped in an explicit untrusted-data fence, so statement text is treated as data — never as instructions to the model.\n\nEach person connects with their **own** API token, which scopes access to their own funds. Create a token at **Account → API Access** in the app (shown once).",
   "author": {

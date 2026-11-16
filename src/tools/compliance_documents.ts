@@ -23,18 +23,20 @@ export function register(server: McpServer, api: Api): void {
       title: "Mark a compliance document prepared",
       annotations: WRITES,
       description:
-        "Mark one of the year's compliance documents (trustee_minutes, investment_strategy, or an " +
-        "auditor-requested one such as trustee_residency_declaration — the part after \"compliance_document:\" in a " +
-        "check key from get_return_checks) as prepared, by pointing at where it lives: document_id of a file " +
-        "already sent with upload_document, and/or url (an https link such as a Claude Docs page), plus an " +
-        "optional note. Its compliance_document:<type> check then reads Done. financial_statements is refused: it " +
-        "freezes when the tax return is finalised. " + RETIRED_NOTE + " Refused for a locked year.",
+        "Mark an uploaded compliance document (one prepared outside Alpha by a third party, e.g. the trust deed, " +
+        "the auditor's report or an ASIC company statement — the part after \"compliance_document:\" in a check key from " +
+        "get_return_checks) as prepared, by pointing at the file: document_id of a file already sent with " +
+        "upload_document, plus an optional note. Its compliance_document:<type> check then reads Done. Every " +
+        "generated document (investment_strategy, trustee_minutes, financial_statements, " +
+        "trustee_residency_declaration, related_party_confirmation, property_valuation …) is refused: write it in " +
+        "Alpha with generate_compliance_document instead — never draft it in an artifact, doc or file and point " +
+        "at that (only a year kept on the earlier list accepts a previous preparer's signed copy). Links to " +
+        "outside work are not accepted. " + RETIRED_NOTE + " Refused for a locked year.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKeyEarly,
         document_type: z.string().describe('Compliance document type, e.g. "trustee_minutes"'),
-        document_id: z.number().int().positive().optional().describe("A fund document from upload_document"),
-        url: z.string().url().optional().describe("https link to the prepared document"),
+        document_id: z.number().int().positive().describe("A fund document from upload_document"),
         note: z.string().optional().describe("What it is / who prepared it")
       }
     },
@@ -57,15 +59,15 @@ export function register(server: McpServer, api: Api): void {
         "Generate one of the year's generated compliance documents in Alpha — what the Prepare/Open button on " +
         "the Compliance step does: financial_statements (the statement of financial position and the operating " +
         "statement with the trustees' declaration as their signing block, figures from the return), " +
-        "trustee_minutes, investment_strategy, or an auditor-requested one (notes_to_financial_statements, " +
-        "trustee_representation_letter, related_party_confirmation, trustee_residency_declaration, " +
-        "property_valuation). Answers fill the document's own fields (the result lists them, with any still " +
+        "trustee_minutes, investment_strategy, property_valuation (required in any year the fund held property " +
+        "at 30 June), or an auditor-requested one (notes_to_financial_statements, " +
+        "trustee_representation_letter, related_party_confirmation, trustee_residency_declaration). Answers fill the document's own fields (the result lists them, with any still " +
         "missing). Running it again updates the draft. The result's warnings list consistency failures (e.g. net " +
         "assets not equal to members' funds). finalize: true freezes it and its check reads Done — refused, with " +
         "blockers, while required fields are blank or, for a financial document, while the year has blocking " +
         "checks or it fails its consistency checks. financial_statements has no finalize: it freezes when the " +
         "return is finalised and unfreezes when it is unfinalised; the trustees' signatures are then recorded on " +
-        "the web. not_applicable: true marks it N/A (not for the three required items). Uploaded types are refused " +
+        "the web. not_applicable: true marks it N/A (not for the required items). Uploaded types are refused " +
         "— use upload_document + mark_compliance_document_prepared. " + RETIRED_NOTE + " Refused for a locked " +
         "year or a document already finalised (reopen it on the web) — unless the result showed out_of_date: " +
         "true, in which case running it again regenerates it.",

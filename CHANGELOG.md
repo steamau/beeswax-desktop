@@ -1,5 +1,15 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.18.0 — 2026-11-17
+- **mark_compliance_document_prepared** takes only an uploaded file: `document_id` is required and `url` is gone.
+  Every generated document (investment strategy, minutes, financial statements, residency declaration, related-party
+  confirmation, property valuation …) is refused; write it in Alpha with `generate_compliance_document`, never in an
+  artifact, doc or file pointed at. A year kept on the earlier list still accepts a previous preparer's signed copy.
+- **generate_compliance_document**: `property_valuation` is required in any year the fund held property at 30 June.
+- **list_ato_accounts**: where the server has the ATO feed (statement lines pulled daily through Beeswax STP), the
+  result carries `feed` — status, last pull and error, and any account whose first pull is waiting for the trustee to
+  review and accept on the web.
+
 ## 1.17.0 — 2026-11-10
 - **The audit, for the auditor's assistant.** `get_audit_program` returns the year's audit program — the same one the
   Audit step shows — in the order an SMSF audit runs: engagement, the fund, planning, Part A financial, Part B

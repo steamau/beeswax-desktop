@@ -24,7 +24,11 @@ export function register(server: McpServer, api: Api): void {
       description:
         "List the fund's ATO accounts (income tax 551, activity statement 001, superannuation 552) with their " +
         "balance (positive = owed to the ATO, negative = the ATO owes the fund), how far the imported statement " +
-        "reaches, and whether Alpha's running balance agrees with the ATO's. Use to find an ato_account_id.",
+        "reaches, and whether Alpha's running balance agrees with the ATO's. Use to find an ato_account_id. Where " +
+        "the server has the ATO feed (statement lines pulled daily through Beeswax STP), the result also carries " +
+        "`feed`: its status (not_connected, active, needs_authorisation = the fund hasn't nominated Beeswax STP " +
+        "with the ATO, error, disconnected), the last pull and error, and any account whose first pull is waiting " +
+        "for the trustee to review and accept on the web (review_url); nothing is written until they do.",
       inputSchema: { fund_id: fundId }
     },
     async ({ fund_id }) => toResult(await api("GET", `/funds/${fund_id}/ato_accounts`))

@@ -31,6 +31,10 @@ export function register(server: McpServer, api: Api): void {
         quantity: z.number().optional().describe("Units acquired"),
         purchase_price_per_unit: z.number().optional().describe("Purchase price per unit in AUD"),
         currency: z.string().optional().describe('Currency code (default "AUD")'),
+        hin: z
+          .string()
+          .optional()
+          .describe('HIN (CHESS-sponsored, e.g. "X0001234567") or SRN (issuer-sponsored, e.g. "I0001234567")'),
         share_registry: z
           .string()
           .optional()
@@ -71,7 +75,10 @@ export function register(server: McpServer, api: Api): void {
           .optional()
           .describe('Asset type by name or category, e.g. "ETF" or "equity" (see list_asset_types)'),
         broker_id: z.number().int().positive().optional().describe("Broker ID (see list_brokers)"),
-        hin: z.string().optional().describe("Holder Identification Number"),
+        hin: z
+          .string()
+          .optional()
+          .describe('HIN (CHESS-sponsored, e.g. "X0001234567") or SRN (issuer-sponsored, e.g. "I0001234567")'),
         share_registry: z
           .string()
           .optional()

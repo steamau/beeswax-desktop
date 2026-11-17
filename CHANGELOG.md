@@ -1,5 +1,14 @@
 # Beeswax Shares MCP server — changelog
 
+## 1.19.0 — 2026-11-17
+- **get_strategy_mix** (new): the fund's mix by investment-strategy asset class against the ranges in the strategy in
+  force — today, or at 30 June (the return's values) with `financial_year`. Each class has its value, %, the strategy's
+  range and a status (`within`, `below`, `above`, `below_min_amount`, `no_range`). Facts against the trustees' own
+  ranges only. The year's check `strategy_ranges` (Compliance tests) also comes through `get_return_checks`.
+- **Year end in four steps.** The server instructions and tool text follow the web app: 1 Review (was Books,
+  trustee), 2 Tax return (accountant), 3 Audit (auditor; the SIS compliance tests and required documents now open
+  the Audit step), 4 Sign & lodge (trustees). Check placements name the Review groups.
+
 ## 1.18.0 — 2026-11-17
 - **mark_compliance_document_prepared** takes only an uploaded file: `document_id` is required and `url` is gone.
   Every generated document (investment strategy, minutes, financial statements, residency declaration, related-party

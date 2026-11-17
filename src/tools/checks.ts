@@ -6,9 +6,9 @@ import { fundId, READS, WRITES, financialYearKeyEarly } from "../shared.js";
 
 export function register(server: McpServer, api: Api): void {
   // ── The tax return's checks ──────────────────────────────────────────────────
-  // There is no separate year-end review: the checks run against the tax return.
+  // The checks run against the tax return.
   // Each lives on the Books step (books_* groups), in a return section (where its
-  // figures land), or on the Compliance step (SIS compliance tests, documents).
+  // figures land), or on the Audit step (SIS compliance tests, documents).
 
   server.registerTool(
     "get_return_checks",
@@ -16,11 +16,11 @@ export function register(server: McpServer, api: Api): void {
       title: "Get the year's checks",
       annotations: READS,
       description:
-        "Every check for a financial year: where it lives (placement — a Books group: \"books_bank\", " +
+        "Every check for a financial year: where it lives (placement — a Review group: \"books_bank\", " +
         "\"books_income\", \"books_holdings\", \"books_other\"; a tax return section such as \"income\" or " +
         "\"assets_liabilities\"; or a Compliance group: \"compliance_tests\", \"documents\"), its " +
         "status (ok / warn / bad / na), state (ready, attention, blocking, accepted, na), figure, reason, the return " +
-        "fields it feeds, and any answer a person recorded. Blocking checks on the Books step and on the return stop the " +
+        "fields it feeds, and any answer a person recorded. Blocking checks on the Review step and on the return stop the " +
         "return being finalised. A check needing attention can be accepted, or a question answered, with " +
         "resolve_return_check once the trustee says so; explain what you found with add_smsf_return_field_note on " +
         "the figures it affects.",

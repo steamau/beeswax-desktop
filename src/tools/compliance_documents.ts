@@ -5,7 +5,7 @@ import { toResult } from "../api.js";
 import { fundId, READS, WRITES, financialYearKeyEarly } from "../shared.js";
 
 export function register(server: McpServer, api: Api): void {
-  // ── Compliance (step 3): the documents the law requires ─────────────────────
+  // ── Compliance (on step 3, Audit): the documents the law requires ─────────────────────
   // Each year asks for three: financial_statements, trustee_minutes and
   // investment_strategy. Retired types answer 410 with where their information
   // lives; auditor-requested (parked) types still work; a year kept on the
@@ -57,7 +57,7 @@ export function register(server: McpServer, api: Api): void {
       annotations: WRITES,
       description:
         "Generate one of the year's generated compliance documents in Alpha — what the Prepare/Open button on " +
-        "the Compliance step does: financial_statements (the statement of financial position and the operating " +
+        "the Audit step does: financial_statements (the statement of financial position and the operating " +
         "statement with the trustees' declaration as their signing block, figures from the return), " +
         "trustee_minutes, investment_strategy, property_valuation (required in any year the fund held property " +
         "at 30 June), or an auditor-requested one (notes_to_financial_statements, " +

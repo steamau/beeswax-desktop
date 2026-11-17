@@ -79,12 +79,12 @@ export const SERVER_INSTRUCTIONS =
   "a price is. Quotes in another currency are converted to the holding's currency at the latest FX " +
   "rate. Unlisted assets (property, unlisted funds, collectibles, etc.) have no feed: their prices " +
   "come only from update_price or record_valuation. There is no tool to trigger a feed refresh. " +
-  "YEAR END: the work is the tax return (the SMSF annual return) — there is no separate year-end review. " +
-  "Each year runs in five steps: 1 Books (everything in the year accounted for: each bank account reconciled " +
+  "YEAR END: the work is the tax return (the SMSF annual return). " +
+  "Each year runs in four steps, each one person's work: 1 Review, the trustee's (everything in the year recorded: each bank account reconciled " +
   "to 30 June by its feed or a statement, every cash line categorised, income recorded with its tax details, " +
-  "holdings valued — the checks placed in books_* groups), 2 Tax return (each section's figures, with the " +
-  "checks behind them — get_smsf_return, get_return_checks), 3 Compliance (the SIS compliance tests and the " +
-  "year's documents), 4 Audit, 5 Sign & lodge. Start with the books. Prepare the ledger so the checks pass, and leave a field note " +
+  "holdings valued — the checks placed in books_* groups), 2 Tax return, the accountant's (each section's figures, with the " +
+  "checks behind them — get_smsf_return, get_return_checks), 3 Audit, the auditor's (it opens on the SIS compliance tests and the " +
+  "year's required documents, then the auditor's program), 4 Sign & lodge, the trustees'. Start with the review. Prepare the ledger so the checks pass, and leave a field note " +
   "(add_smsf_return_field_note) on each figure explaining what you found and did. Accepting a check that needs " +
   "attention or answering a check's question is the trustee's call: do it with resolve_return_check only after " +
   "quoting the check, the answer and the note to them and getting an explicit yes (blocking checks must be fixed). " +

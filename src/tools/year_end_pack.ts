@@ -349,7 +349,7 @@ export function register(server: McpServer, api: Api): void {
         "present), no_non_resident_contributions, events_after_year_end (uses the notes' subsequent events), " +
         "late_lodgments (with late_lodgments_detail). strategy_reviewed (default true) keeps the resolution that " +
         "the investment strategy was reviewed; once the minutes are finalised that is the year's strategy review " +
-        "on the Compliance step. Refused for a locked year or finalised minutes.",
+        "on the Audit step. Refused for a locked year or finalised minutes.",
       inputSchema: {
         fund_id: fundId,
         financial_year: financialYearKey,

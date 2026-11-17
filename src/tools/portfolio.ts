@@ -82,6 +82,31 @@ export function register(server: McpServer, api: Api): void {
   );
 
   server.registerTool(
+    "get_strategy_mix",
+    {
+      title: "Get fund mix against the investment strategy",
+      annotations: READS,
+      description:
+        "The fund's mix by investment-strategy asset class (Australian shares, international shares, property, " +
+        "fixed interest, cash, alternatives, other) against the ranges in the trustees' investment strategy in " +
+        "force: today's values, or the 30 June values the return uses when financial_year is given. Each class " +
+        "has its value, % of the fund (holdings plus bank cash), the strategy's range and a status (within, " +
+        "below, above, below_min_amount, no_range); `strategy.web_url` opens the strategy. Report these as facts " +
+        "against the trustees' own ranges. Never suggest a range, an allocation or a trade: what the trustees do " +
+        "when a class leaves its range is in their strategy and is their decision.",
+      inputSchema: {
+        fund_id: fundId,
+        financial_year: z
+          .string()
+          .optional()
+          .describe('Financial year label, e.g. "2024-25", for the mix at that 30 June. Omit for today.')
+      }
+    },
+    async ({ fund_id, financial_year }) =>
+      toResult(await api("GET", `/funds/${fund_id}/strategy_mix`, { query: { financial_year } }))
+  );
+
+  server.registerTool(
     "list_holdings",
     {
       title: "List holdings",
